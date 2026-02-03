@@ -1,0 +1,29 @@
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+.env
+
+# Data artifacts
+data/
+*.shp
+*.shx
+*.dbf
+*.prj
+*.cpg
+*.gpkg
+*.geojson
+*.jsonl
+*.ndjson
+*.pmtiles
+
+# Node
+node_modules/
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+dist/
+build/

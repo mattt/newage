@@ -1,0 +1,12 @@
+name = "portland-tiles"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "portland-tiles"
+
+[vars]
+ALLOWED_ORIGINS = "*"
+CACHE_CONTROL = "public, max-age=86400"
+PUBLIC_HOSTNAME = "tiles.yourdomain.com"

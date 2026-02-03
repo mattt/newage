@@ -1,0 +1,4 @@
+geopandas
+shapely
+pandas
+pyogrio
