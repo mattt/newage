@@ -2,7 +2,7 @@
 
 ![](./assets/new-age-of-the-city-screenshot.png)
 
-This repo rebuilds the original ["Age of the City"](https://blog.mapbox.com/portland-the-age-of-a-city-19823fd62c60) visualization
+This repo rebuilds the original ["Age of the City"](https://labratrevenge.com/) visualization
 by [Justin Palmer](https://github.com/caged)
 using [PMTiles](https://github.com/protomaps/PMTiles) hosted on Cloudflare R2/Workers
 and rendered with MapLibre GL JS.
@@ -18,13 +18,13 @@ Portland's Building Footprints dataset includes a `YEAR_BUILT` field suitable fo
 
 Key attributes:
 
-| Field | Type | Description |
-|-------|------|-------------|
+| Field        | Type    | Description                  |
+| ------------ | ------- | ---------------------------- |
 | `YEAR_BUILT` | Integer | Construction year (nullable) |
-| `BLDG_ID` | String | Unique building identifier |
-| `BLDG_USE` | String | Use category |
-| `BLDG_SQFT` | Integer | Square footage |
-| `NUM_STORY` | Integer | Number of stories |
+| `BLDG_ID`    | String  | Unique building identifier   |
+| `BLDG_USE`   | String  | Use category                 |
+| `BLDG_SQFT`  | Integer | Square footage               |
+| `NUM_STORY`  | Integer | Number of stories            |
 
 > [!NOTE]
 > `YEAR_BUILT` is missing for many features.
