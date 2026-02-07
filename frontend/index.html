@@ -71,18 +71,19 @@
       ? {
         type: "vector",
         url: tilesUrl,
-        maxzoom: 15,
+        maxzoom: 18,
       }
       : {
         type: "vector",
         tiles: [tilesUrl],
-        maxzoom: 15,
+        maxzoom: 18,
       };
 
     const map = new maplibregl.Map({
       container: "map",
       center: [-122.676, 45.523],
       zoom: 13,
+      maxZoom: 18,
       style: {
         version: 8,
         sources: {

@@ -95,7 +95,7 @@ tippecanoe \
   -l buildings \
   -n "Portland Building Ages" \
   --projection=EPSG:4326 \
-  -zg \
+  -z18 \
   --drop-densest-as-needed \
   --extend-zooms-if-still-dropping \
   --coalesce-densest-as-needed \
