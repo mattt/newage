@@ -9,52 +9,200 @@
   <script src="https://unpkg.com/maplibre-gl@4.0.0/dist/maplibre-gl.js"></script>
   <script src="https://unpkg.com/pmtiles@3.0.6/dist/pmtiles.js"></script>
   <style>
+    :root {
+      --topbar-bg: #141414;
+      --topbar-fg: rgba(255, 255, 255, 0.9);
+      --topbar-muted: rgba(255, 255, 255, 0.65);
+      --topbar-border: rgba(255, 255, 255, 0.08);
+      --accent: #ff2fb3;
+    }
+
     html,
-    body,
-    #map {
-      margin: 0;
+    body {
       height: 100%;
+      margin: 0;
+    }
+
+    body {
+      font: 13px/1.25 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: #000;
+      overflow: hidden;
+    }
+
+    #app {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      grid-template-rows: calc(44px + env(safe-area-inset-top)) 1fr;
+    }
+
+    .topbar {
+      grid-row: 1;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      padding: calc(env(safe-area-inset-top)) 16px 8px 16px;
+      background: var(--topbar-bg);
+      border-bottom: 1px solid var(--topbar-border);
+      color: var(--topbar-fg);
+      user-select: none;
+    }
+
+    .topbar-left {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 6px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--topbar-fg);
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .brand-star {
+      color: var(--accent);
+      font-size: 12px;
+      transform: translateY(-1px);
+    }
+
+    .page-title {
+      color: var(--topbar-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 70vw;
+    }
+
+    .topbar-right {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      color: var(--topbar-muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .topbar-right a {
+      color: inherit;
+      text-decoration: none;
+      border-bottom: 1px solid transparent;
+    }
+
+    .topbar-right a:hover {
+      border-bottom-color: currentColor;
+    }
+
+    #map {
+      grid-row: 2;
+      position: relative;
+      min-height: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
     }
 
     .legend {
       position: absolute;
+      right: 20px;
       bottom: 20px;
-      left: 20px;
-      background: #fff;
+      z-index: 2;
+      background: rgba(20, 20, 20, 0.86);
+      color: rgba(255, 255, 255, 0.92);
       padding: 10px 12px;
-      border-radius: 6px;
-      font: 12px/1.3 system-ui, -apple-system, sans-serif;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+      backdrop-filter: blur(8px);
+      max-width: min(360px, calc(100vw - 40px));
     }
 
-    .legend .row {
+    .legend-head {
+      font-weight: 700;
+      font-size: 11px;
+      margin: 0 0 2px 0;
+      color: rgba(255, 255, 255, 0.92);
+    }
+
+    .legend-title {
+      font-weight: 700;
+      font-size: 11px;
+      margin: 0 0 6px 0;
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .legend-bar {
+      height: 8px;
+      border-radius: 2px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: linear-gradient(90deg,
+          #00d18f 0%,
+          #00c7a8 18%,
+          #00bcd4 36%,
+          #0091ea 52%,
+          #2962ff 68%,
+          #6a5cff 82%,
+          #ff2fb3 100%);
+      margin: 0 0 6px 0;
+    }
+
+    .legend-labels {
       display: flex;
-      align-items: center;
-      gap: 8px;
-      margin: 4px 0;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.75);
+      margin: 0 0 8px 0;
     }
 
-    .legend .swatch {
-      width: 14px;
-      height: 14px;
-      border: 1px solid #333;
+    .legend-meta {
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.6);
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: space-between;
+    }
+
+    .maplibregl-popup-content {
+      font: 12px/1.25 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
     }
   </style>
 </head>
 
 <body>
-  <div id="map"></div>
-  <div class="legend">
-    <strong>Year Built</strong>
-    <div class="row"><span class="swatch" style="background:#67001f"></span>pre-1900</div>
-    <div class="row"><span class="swatch" style="background:#b2182b"></span>1900-1919</div>
-    <div class="row"><span class="swatch" style="background:#d6604d"></span>1920-1944</div>
-    <div class="row"><span class="swatch" style="background:#f4a582"></span>1945-1959</div>
-    <div class="row"><span class="swatch" style="background:#fddbc7"></span>1960-1979</div>
-    <div class="row"><span class="swatch" style="background:#d1e5f0"></span>1980-1999</div>
-    <div class="row"><span class="swatch" style="background:#4393c3"></span>2000-2009</div>
-    <div class="row"><span class="swatch" style="background:#2166ac"></span>2010-present</div>
-    <div class="row"><span class="swatch" style="background:#808080"></span>unknown</div>
+  <div id="app">
+    <header class="topbar" role="banner">
+      <div class="topbar-left">
+        <div class="page-title" title="Portland, Oregon: The Age of a City">Portland, Oregon: The Age of a City</div>
+      </div>
+      <nav class="topbar-right" aria-label="Links">
+        <a href="../README.md">About</a>
+      </nav>
+    </header>
+
+    <div id="map">
+      <div class="legend" aria-label="Legend">
+        <div class="legend-head">Portland, Oregon: The Age of a City</div>
+        <div class="legend-title">Year Built</div>
+        <div class="legend-bar" role="img" aria-label="Color scale from older to newer buildings"></div>
+        <div class="legend-labels">
+          <span>pre-1900</span>
+          <span>2010+</span>
+        </div>
+        <div class="legend-meta">
+          <span>Source: City of Portland</span>
+          <span>© Justin Palmer, OSM contributors</span>
+        </div>
+      </div>
+    </div>
   </div>
   <script>
     const useLocalPmtiles = true;
@@ -91,6 +239,11 @@
         },
         layers: [
           {
+            id: "background",
+            type: "background",
+            paint: { "background-color": "#000" },
+          },
+          {
             id: "buildings-fill",
             type: "fill",
             source: "buildings",
@@ -100,26 +253,26 @@
                 "match",
                 ["get", "age_bucket"],
                 "pre-1900",
-                "#67001f",
+                "#00d18f",
                 "1900-1919",
-                "#b2182b",
+                "#00c7a8",
                 "1920-1944",
-                "#d6604d",
+                "#00bcd4",
                 "1945-1959",
-                "#f4a582",
+                "#0091ea",
                 "1960-1979",
-                "#fddbc7",
+                "#2962ff",
                 "1980-1999",
-                "#d1e5f0",
+                "#6a5cff",
                 "2000-2009",
-                "#4393c3",
+                "#a855f7",
                 "2010-present",
-                "#2166ac",
+                "#ff2fb3",
                 "unknown",
-                "#808080",
-                "#808080",
+                "#3a3a3a",
+                "#3a3a3a",
               ],
-              "fill-opacity": 0.8,
+              "fill-opacity": 0.9,
             },
           },
           {
@@ -128,13 +281,16 @@
             source: "buildings",
             "source-layer": "buildings",
             paint: {
-              "line-color": "#333",
-              "line-width": 0.3,
+              "line-color": "#000",
+              "line-width": 0.0,
+              "line-opacity": 0.0,
             },
           },
         ],
       },
     });
+
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-left");
 
     const popup = new maplibregl.Popup({
       closeButton: false,

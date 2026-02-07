@@ -105,6 +105,11 @@ tippecanoe \
   data/buildings_cleaned.ndjson
 ```
 
+> [!NOTE]
+> If tiles “stop loading” when you zoom in, it usually means your tileset’s max zoom is too low.
+> Increase the `-z` value above (for example, `-z18`) and keep the map source `maxzoom` in
+> `frontend/index.html` in sync with the same number.
+
 Sanity check:
 
 ```bash
