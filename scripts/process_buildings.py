@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
@@ -8,6 +9,7 @@
 #   "pyogrio",
 # ]
 # ///
+
 from __future__ import annotations
 
 import argparse
@@ -35,7 +37,9 @@ def assign_bucket(year: int) -> str:
         return "1980-1999"
     if year < 2010:
         return "2000-2009"
-    return "2010-present"
+    if year < 2020:
+        return "2010-2019"
+    return "2020-present"
 
 
 def normalize_year(value: Optional[float], current_year: int) -> int:
@@ -88,9 +92,9 @@ def main() -> None:
         )
 
     gdf["geometry"] = gdf["geometry"].apply(
-        lambda geom: make_valid(geom)
-        if geom is not None and not geom.is_valid
-        else geom
+        lambda geom: (
+            make_valid(geom) if geom is not None and not geom.is_valid else geom
+        )
     )
 
     gdf = gdf[["geometry", "year_built", "age_bucket", "BLDG_ID"]]

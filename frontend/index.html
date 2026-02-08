@@ -141,16 +141,18 @@
     .legend-bar {
       height: 8px;
       border-radius: 2px;
-      border: 1px solid rgba(255, 255, 255, 0.18);
-      background: linear-gradient(90deg,
-          #00d18f 0%,
-          #00c7a8 18%,
-          #00bcd4 36%,
-          #0091ea 52%,
-          #2962ff 68%,
-          #6a5cff 82%,
-          #ff2fb3 100%);
+      display: flex;
+      overflow: hidden;
+      /* Use inset stroke instead of border to avoid edge artifacts */
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
       margin: 0 0 6px 0;
+    }
+
+    .legend-step {
+      flex: 1 1 0;
+      min-width: 0;
+      height: 100%;
+      background: var(--c);
     }
 
     .legend-labels {
@@ -192,10 +194,20 @@
       <div class="legend" aria-label="Legend">
         <div class="legend-head">Portland, Oregon: The Age of a City</div>
         <div class="legend-title">Year Built</div>
-        <div class="legend-bar" role="img" aria-label="Color scale from older to newer buildings"></div>
+        <div class="legend-bar" role="img" aria-label="Color scale from older to newer buildings">
+          <span class="legend-step" aria-hidden="true" style="--c:#00d18f"></span>
+          <span class="legend-step" aria-hidden="true" style="--c:#00c7a8"></span>
+          <span class="legend-step" aria-hidden="true" style="--c:#00bcd4"></span>
+          <span class="legend-step" aria-hidden="true" style="--c:#0091ea"></span>
+          <span class="legend-step" aria-hidden="true" style="--c:#2962ff"></span>
+          <span class="legend-step" aria-hidden="true" style="--c:#6a5cff"></span>
+          <span class="legend-step" aria-hidden="true" style="--c:#a855f7"></span>
+          <span class="legend-step" aria-hidden="true" style="--c:#ff2fb3"></span>
+          <span class="legend-step" aria-hidden="true" style="--c:#f4f4f5"></span>
+        </div>
         <div class="legend-labels">
           <span>pre-1900</span>
-          <span>2010+</span>
+          <span>2020+</span>
         </div>
         <div class="legend-meta">
           <span>Source: City of Portland</span>
@@ -266,8 +278,10 @@
                 "#6a5cff",
                 "2000-2009",
                 "#a855f7",
-                "2010-present",
+                "2010-2019",
                 "#ff2fb3",
+                "2020-present",
+                "#f4f4f5",
                 "unknown",
                 "#3a3a3a",
                 "#3a3a3a",
