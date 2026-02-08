@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
@@ -9,7 +8,6 @@
 #   "pyogrio",
 # ]
 # ///
-
 from __future__ import annotations
 
 import argparse
@@ -37,9 +35,7 @@ def assign_bucket(year: int) -> str:
         return "1980-1999"
     if year < 2010:
         return "2000-2009"
-    if year < 2020:
-        return "2010-2019"
-    return "2020-present"
+    return "2010-present"
 
 
 def normalize_year(value: Optional[float], current_year: int) -> int:
