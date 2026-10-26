@@ -2,7 +2,7 @@
 
 ![](./assets/new-age-of-the-city-screenshot.png)
 
-This repo rebuilds the original ["Age of the City"](https://blog.mapbox.com/portland-the-age-of-a-city-19823fd62c60) visualization
+This repo rebuilds the 2013 map ["Portland, Oregon: The Age of a City"](https://blog.mapbox.com/portland-the-age-of-a-city-19823fd62c60)
 by [Justin Palmer](https://github.com/caged)
 using [PMTiles](https://github.com/protomaps/PMTiles) hosted on Cloudflare R2/Workers
 and rendered with MapLibre GL JS.
