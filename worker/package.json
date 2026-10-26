@@ -1,15 +1,20 @@
 {
-  "name": "portland-tiles-worker",
+  "name": "ageofthe-city",
   "private": true,
   "type": "module",
   "scripts": {
-    "deploy": "wrangler deploy",
-    "dev": "wrangler dev"
+    "build": "node scripts/build.ts",
+    "check": "tsc",
+    "dev": "wrangler dev --infer-origin-from-routes=false",
+    "deploy": "wrangler deploy"
   },
   "dependencies": {
-    "pmtiles": "latest"
+    "maplibre-gl": "6.16.0",
+    "pmtiles": "4.5.0"
   },
   "devDependencies": {
-    "wrangler": "latest"
+    "@cloudflare/workers-types": "5.20261026.1",
+    "typescript": "7.0.2",
+    "wrangler": "4.153.0"
   }
 }

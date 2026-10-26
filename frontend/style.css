@@ -1,0 +1,117 @@
+:root {
+  --text: #1a1a1a;
+  --link: #0b57a4;
+  --focus: #0b57a4;
+  font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--text);
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #fff;
+}
+
+#map {
+  position: fixed;
+  inset: 0;
+}
+
+.panel {
+  position: absolute;
+  left: 10px;
+  z-index: 1;
+  background: #fff;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.2);
+  padding: 8px 12px;
+}
+
+.panel summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.panel :focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.info {
+  top: 10px;
+  max-width: min(20rem, calc(100vw - 80px));
+}
+
+.info h1 {
+  display: inline;
+  font-size: 1rem;
+  margin: 0;
+}
+
+.info p {
+  margin: 0.6em 0 0;
+}
+
+.info a {
+  color: var(--link);
+}
+
+.legend {
+  bottom: 20px;
+}
+
+.legend ul {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+}
+
+.swatch {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 1px solid #333;
+}
+
+/* Colors match the fill-color expression in app.js. */
+.pre-1900 { background: #67001f; }
+.y1900 { background: #b2182b; }
+.y1920 { background: #d6604d; }
+.y1945 { background: #f4a582; }
+.y1960 { background: #fddbc7; }
+.y1980 { background: #d1e5f0; }
+.y2000 { background: #4393c3; }
+.y2010 { background: #2166ac; }
+.unknown { background: #808080; }
+
+@media (max-width: 600px) {
+  :root {
+    font-size: 12px;
+  }
+
+  .panel {
+    padding: 6px 10px;
+  }
+
+  .legend {
+    bottom: 10px;
+  }
+
+  .legend li {
+    margin: 2px 0;
+  }
+
+  .swatch {
+    width: 12px;
+    height: 12px;
+  }
+}
