@@ -2,7 +2,7 @@
 
 ![](./assets/new-age-of-the-city-screenshot.png)
 
-This repo rebuilds the original ["Age of the City"](https://labratrevenge.com/) visualization
+This repo rebuilds the 2013 map ["Portland, Oregon: The Age of a City"](https://labratrevenge.com/)
 by [Justin Palmer](https://github.com/caged)
 using [PMTiles](https://github.com/protomaps/PMTiles) hosted on Cloudflare R2/Workers
 and rendered with MapLibre GL JS.
@@ -37,8 +37,8 @@ Key attributes:
 1. Download the building footprints (Shapefile recommended).
 2. Run the preprocessing script to reproject, clean years, and generate NDJSON.
 3. Build PMTiles with Tippecanoe.
-4. Upload PMTiles to R2 and deploy the Cloudflare Worker.
-5. Point MapLibre at the worker's tile endpoints.
+4. Upload PMTiles to R2 and deploy the Cloudflare Worker,
+   which serves the page and the tiles.
 
 ## 0) Install dependencies
 
@@ -53,7 +53,6 @@ This installs:
 - `uv` for Python dependency management
 - `tippecanoe` for generating PMTiles
 - `pmtiles` CLI for inspecting tilesets
-- `caddy` for local development server
 
 ## 1) Python preprocessing
 
@@ -107,8 +106,8 @@ tippecanoe \
 
 > [!NOTE]
 > If tiles “stop loading” when you zoom in, it usually means your tileset’s max zoom is too low.
-> Increase the `-z` value above (for example, `-z18`) and keep the map source `maxzoom` in
-> `frontend/index.html` in sync with the same number.
+> Increase the `-z` value above (for example, `-z18`).
+> The Worker's TileJSON reads the max zoom from the tileset, so the map needs no change.
 
 Sanity check:
 
@@ -116,107 +115,66 @@ Sanity check:
 pmtiles show data/portland_buildings.pmtiles
 ```
 
-## Local testing (no Cloudflare)
+## 3) Run the site locally
 
-Use a local Caddy server to host both the HTML and the `.pmtiles` file.
-This avoids CORS issues while still supporting HTTP `Range` requests.
+The `worker/` directory holds the Cloudflare Worker for https://ageofthe.city/.
+It serves the page in `frontend/` as static assets
+and the tiles from a PMTiles archive in R2, at the same origin:
 
-```bash
-brew install caddy
-cd /path/to/repo
-caddy file-server --root . --listen :8000
-```
+- `/tiles/portland_buildings.json` returns TileJSON.
+  Its tile URLs carry the archive's ETag as `?v=`,
+  so a new archive gets new tile URLs.
+- `/tiles/portland_buildings/{z}/{x}/{y}.mvt` returns a tile.
+  Versioned tiles are cached for a year;
+  a position with no buildings returns `204 No Content`.
+- `www.ageofthe.city` redirects to `ageofthe.city` with a 308.
 
-Open:
+The build step (`npm run build`, which Wrangler runs before `dev` and `deploy`)
+copies `frontend/` and the MapLibre GL JS files from `node_modules`
+into `worker/dist/`.
+It requires Node.js 22.18 or later.
 
-```
-http://localhost:8000/frontend/index.html
-```
-
-In `frontend/index.html`, set `useLocalPmtiles = true` and use this URL:
-
-```
-pmtiles://http://localhost:8000/data/portland_buildings.pmtiles
-```
-
-This bypasses the Worker and lets you validate tiles locally before uploading.
-
-## 3) Cloudflare R2 + Worker
-
-This repo includes a Worker that proxies PMTiles from R2
-and exposes standard `/{name}/{z}/{x}/{y}.mvt` URLs.
-
-### Create an R2 bucket
-
-```bash
-wrangler r2 bucket create portland-tiles
-```
-
-### Upload PMTiles
-
-Small files:
-
-```bash
-wrangler r2 object put portland-tiles/portland_buildings.pmtiles \
-  --file=data/portland_buildings.pmtiles
-```
-
-Large files (using rclone):
-
-```bash
-rclone copyto data/portland_buildings.pmtiles \
-  remote:portland-tiles/portland_buildings.pmtiles \
-  --progress --s3-chunk-size=256M
-```
-
-### Configure and deploy the Worker
-
-Edit `worker/wrangler.toml` to set your bucket name and preferred host:
-
-```toml
-name = "portland-tiles"
-main = "src/index.ts"
-compatibility_date = "2024-01-01"
-
-[[r2_buckets]]
-binding = "BUCKET"
-bucket_name = "portland-tiles"
-
-[vars]
-ALLOWED_ORIGINS = "*"
-CACHE_CONTROL = "public, max-age=86400"
-PUBLIC_HOSTNAME = "tiles.yourdomain.com"
-```
-
-Deploy:
+Upload the tileset to local R2 and start the development server:
 
 ```bash
 cd worker
 npm install
+npx wrangler r2 object put ageofthe-city/portland_buildings.pmtiles \
+  --file=../data/portland_buildings.pmtiles --local
+npm run dev
+```
+
+Open http://localhost:8787/.
+
+## 4) Deploy to Cloudflare
+
+The Worker `ageofthe-city` serves the custom domains
+`ageofthe.city` and `www.ageofthe.city`,
+and reads the tiles from the R2 bucket `ageofthe-city`.
+The zone for `ageofthe.city` must be in the same Cloudflare account.
+If your Wrangler login has access to more than one account,
+set `CLOUDFLARE_ACCOUNT_ID` first.
+
+```bash
+cd worker
+npm install
+npx wrangler r2 bucket create ageofthe-city
+npx wrangler r2 object put ageofthe-city/portland_buildings.pmtiles \
+  --file=../data/portland_buildings.pmtiles --remote
 npm run deploy
 ```
 
-> [!IMPORTANT]
-> Use a custom domain (not `*.workers.dev`) to enable Cache API.
+To publish a new tileset, upload it again with the same command.
+The TileJSON is cached for five minutes,
+then the page requests tiles with the new version.
 
-### Validate caching
+Check the responses:
 
 ```bash
-curl -I https://tiles.yourdomain.com/portland_buildings/13/1309/3169.mvt
+curl -I https://ageofthe.city/
+curl -s https://ageofthe.city/tiles/portland_buildings.json
+curl -I https://www.ageofthe.city/
 ```
-
-Confirm `Cf-Cache-Status: HIT` on subsequent requests.
-
-## 4) MapLibre GL JS demo
-
-Open `frontend/index.html` and update the tiles URL if needed:
-
-```
-https://tiles.yourdomain.com/portland_buildings/{z}/{x}/{y}.mvt
-```
-
-The demo provides bucket-based styling
-and a commented interpolate example for continuous gradients.
 
 ## Costs
 
@@ -226,5 +184,10 @@ and a commented interpolate example for continuous gradients.
 
 ## License and attribution
 
-Respect Portland's open data terms and add attribution in your UI.
-The default tiles are derived from Portland Bureau of Planning and Sustainability datasets.
+The [City of Portland Terms of Use for Open Data](https://www.portlandmaps.com/img/tos.pdf)
+make data on the PortlandMaps Open Data website available under the
+[Public Domain Dedication and License v1.0](http://www.opendatacommons.org/licenses/pddl/1.0/),
+except where the data's page or metadata states otherwise.
+The building footprints come from the City of Portland
+Bureau of Planning and Sustainability,
+and the page credits them.
