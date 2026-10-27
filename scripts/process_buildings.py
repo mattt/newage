@@ -88,9 +88,9 @@ def main() -> None:
         )
 
     gdf["geometry"] = gdf["geometry"].apply(
-        lambda geom: make_valid(geom)
-        if geom is not None and not geom.is_valid
-        else geom
+        lambda geom: (
+            make_valid(geom) if geom is not None and not geom.is_valid else geom
+        )
     )
 
     gdf = gdf[["geometry", "year_built", "age_bucket", "BLDG_ID"]]

@@ -2,7 +2,7 @@
 
 ![](./assets/new-age-of-the-city-screenshot.png)
 
-This repo rebuilds the 2013 map ["Portland, Oregon: The Age of a City"](https://blog.mapbox.com/portland-the-age-of-a-city-19823fd62c60)
+This repo rebuilds the 2013 map ["Portland, Oregon: The Age of a City"](https://labratrevenge.com/)
 by [Justin Palmer](https://github.com/caged)
 using [PMTiles](https://github.com/protomaps/PMTiles) hosted on Cloudflare R2/Workers
 and rendered with MapLibre GL JS.
@@ -18,13 +18,13 @@ Portland's Building Footprints dataset includes a `YEAR_BUILT` field suitable fo
 
 Key attributes:
 
-| Field | Type | Description |
-|-------|------|-------------|
+| Field        | Type    | Description                  |
+| ------------ | ------- | ---------------------------- |
 | `YEAR_BUILT` | Integer | Construction year (nullable) |
-| `BLDG_ID` | String | Unique building identifier |
-| `BLDG_USE` | String | Use category |
-| `BLDG_SQFT` | Integer | Square footage |
-| `NUM_STORY` | Integer | Number of stories |
+| `BLDG_ID`    | String  | Unique building identifier   |
+| `BLDG_USE`   | String  | Use category                 |
+| `BLDG_SQFT`  | Integer | Square footage               |
+| `NUM_STORY`  | Integer | Number of stories            |
 
 > [!NOTE]
 > `YEAR_BUILT` is missing for many features.
@@ -94,7 +94,7 @@ tippecanoe \
   -l buildings \
   -n "Portland Building Ages" \
   --projection=EPSG:4326 \
-  -zg \
+  -z18 \
   --drop-densest-as-needed \
   --extend-zooms-if-still-dropping \
   --coalesce-densest-as-needed \
@@ -103,6 +103,11 @@ tippecanoe \
   -f \
   data/buildings_cleaned.ndjson
 ```
+
+> [!NOTE]
+> If tiles “stop loading” when you zoom in, it usually means your tileset’s max zoom is too low.
+> Increase the `-z` value above (for example, `-z18`).
+> The Worker's TileJSON reads the max zoom from the tileset, so the map needs no change.
 
 Sanity check:
 
