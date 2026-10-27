@@ -5,7 +5,25 @@ if (window.matchMedia("(min-width: 601px)").matches) {
   document.getElementById("info").open = true;
 }
 
-const UNKNOWN = "#808080";
+// Colors follow the palette of Justin Palmer's 2013 map:
+// aquamarine for the oldest buildings, purple for the 1950s,
+// and hot pink fading to white for the newest.
+// The legend gradient in style.css uses the same stops.
+const BACKGROUND = "#050506";
+const UNKNOWN = "#3a3a3d";
+const YEAR_STOPS = [
+  1885, "#30fbff",
+  1920, "#74d5fe",
+  1940, "#8eabff",
+  1955, "#b986fa",
+  1965, "#ed7cfa",
+  1975, "#fd29ec",
+  1995, "#ff8cf4",
+  2010, "#ffc8fb",
+  2025, "#fff4fe",
+];
+
+const yearBuilt = ["to-number", ["get", "year_built"], -1];
 
 const map = new Map({
   container: "map",
@@ -24,7 +42,7 @@ const map = new Map({
       {
         id: "background",
         type: "background",
-        paint: { "background-color": "#ffffff" },
+        paint: { "background-color": BACKGROUND },
       },
       {
         id: "buildings-fill",
@@ -33,30 +51,24 @@ const map = new Map({
         "source-layer": "buildings",
         paint: {
           "fill-color": [
-            "match",
-            ["get", "age_bucket"],
-            "pre-1900", "#67001f",
-            "1900-1919", "#b2182b",
-            "1920-1944", "#d6604d",
-            "1945-1959", "#f4a582",
-            "1960-1979", "#fddbc7",
-            "1980-1999", "#d1e5f0",
-            "2000-2009", "#4393c3",
-            "2010-present", "#2166ac",
-            "unknown", UNKNOWN,
+            "case",
+            ["<", yearBuilt, 0],
             UNKNOWN,
+            ["interpolate-lab", ["linear"], yearBuilt, ...YEAR_STOPS],
           ],
-          "fill-opacity": 0.8,
         },
       },
+      // A hairline in the background color separates adjacent buildings
+      // when they are large enough to show it.
       {
         id: "buildings-outline",
         type: "line",
         source: "buildings",
         "source-layer": "buildings",
+        minzoom: 15,
         paint: {
-          "line-color": "#333",
-          "line-width": 0.3,
+          "line-color": BACKGROUND,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 15, 0.3, 18, 1],
         },
       },
     ],

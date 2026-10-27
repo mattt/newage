@@ -18,7 +18,7 @@
   <meta property="og:image:height" content="630" />
   <meta property="og:image:alt" content="Map of central Portland with buildings colored by the year each was built" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="theme-color" content="#ffffff" />
+  <meta name="theme-color" content="#050506" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="/vendor/maplibre-gl/maplibre-gl.css" />
   <link rel="stylesheet" href="/style.css" />
@@ -47,15 +47,16 @@
   <aside class="panel legend" aria-labelledby="legend-title">
     <details open>
       <summary id="legend-title">Year Built</summary>
+      <div class="ramp" role="img"
+        aria-label="Color scale: aquamarine for buildings from 1885 and earlier, blue for the 1920s and 1930s, purple for the 1950s, hot pink for the 1970s, and pink fading to white for the newest buildings.">
+        <div class="ramp-bar"></div>
+        <div class="ramp-labels">
+          <span class="y1900">1900</span>
+          <span class="y1950">1950</span>
+          <span class="y2000">2000</span>
+        </div>
+      </div>
       <ul>
-        <li><span class="swatch pre-1900" aria-hidden="true"></span>pre-1900</li>
-        <li><span class="swatch y1900" aria-hidden="true"></span>1900-1919</li>
-        <li><span class="swatch y1920" aria-hidden="true"></span>1920-1944</li>
-        <li><span class="swatch y1945" aria-hidden="true"></span>1945-1959</li>
-        <li><span class="swatch y1960" aria-hidden="true"></span>1960-1979</li>
-        <li><span class="swatch y1980" aria-hidden="true"></span>1980-1999</li>
-        <li><span class="swatch y2000" aria-hidden="true"></span>2000-2009</li>
-        <li><span class="swatch y2010" aria-hidden="true"></span>2010-present</li>
         <li><span class="swatch unknown" aria-hidden="true"></span>unknown</li>
       </ul>
     </details>
