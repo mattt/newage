@@ -34,3 +34,11 @@ The canonical URL remains unchanged.
 The static endpoint contains the README screenshot on `#050506`.
 It uses the existing Astro raster service with PNG palette compression.
 The original README screenshot remains at its existing path.
+
+Uncached renders use an in-isolate budget: a burst of six, refilling at six
+per minute, with at most two concurrent renders.
+Cache hits consume no budget, and identical concurrent misses share PNG bytes.
+Selections round coordinates to six decimals before forming the cache key.
+Over-budget requests redirect to the static image without loading card tiles.
+This is a mitigation under the edge cache, not an account-wide guarantee.
+The retained `/og-image.jpg` is a legacy URL; new metadata uses `/share.png`.

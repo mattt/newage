@@ -85,3 +85,26 @@ it("reads the requested archive zoom from a fake tile source", async () => {
   expect(calls.length).toBeGreaterThan(0);
   expect(calls.every((z) => z === 13)).toBe(true);
 });
+
+it("normalizes coordinate precision before forming the image key", () => {
+  const precise = new URL(url);
+  precise.searchParams.set("lat", "45.51914801");
+  precise.searchParams.set("lng", "-122.68032101");
+  expect(metadata(precise, "archive", 2026)).toEqual(metadata(url, "archive", 2026));
+});
+
+it("highlights all fragments with the selected or fallback building ID", () => {
+  const ring = [{ x: 870, y: 300 }, { x: 900, y: 300 }, { x: 900, y: 330 }];
+  const shapes = [
+    { id: "shared", year: 1978, rings: [ring] },
+    { id: "shared", year: 1978, rings: [ring] },
+    { id: "other", year: 1978, rings: [ring] },
+  ];
+  for (const building of ["shared", "missing"]) {
+    const svg = cardSvg({ ...parseSelection(url)!, building }, shapes, 2026);
+    expect(svg.match(/stroke="#ffffff"/g)).toHaveLength(2);
+    expect(svg.match(/opacity="1"/g)).toHaveLength(2);
+  }
+  const anonymous = shapes.map((shape) => ({ ...shape, id: "" }));
+  expect(cardSvg(parseSelection(url)!, anonymous, 2026).match(/stroke="#ffffff"/g)).toHaveLength(1);
+});

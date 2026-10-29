@@ -36,7 +36,7 @@ export function parseSelection(url: URL): Selection | null {
     lng > -122.25
   )
     return null;
-  return { building, year, lat, lng };
+  return { building, year, lat: Math.round(lat * 1e6) / 1e6, lng: Math.round(lng * 1e6) / 1e6 };
 }
 export function yearColor(year: number | null): string {
   if (year === null || !Number.isFinite(year) || year <= 0) return "#3a3a3d";
@@ -96,10 +96,12 @@ export function cardSvg(s: Selection, shapes: Shape[], epoch: number): string {
         }
       }
   }
+  const selectedId = chosen?.id;
+  const isSelected = (shape: Shape) => selectedId ? shape.id === selectedId : shape === chosen;
   const paths = shapes
     .map(
       (f) =>
-        `<path d="${f.rings.map((r) => r.map((p, i) => `${i ? "L" : "M"}${p.x.toFixed(2)},${p.y.toFixed(2)}`).join("") + "Z").join("")}" fill="${yearColor(f.year)}" fill-rule="evenodd" stroke="${f === chosen ? "#ffffff" : "#050506"}" stroke-width="${f === chosen ? 3 : 0.6}" opacity="${f === chosen ? 1 : 0.7}"/>`,
+        `<path d="${f.rings.map((r) => r.map((p, i) => `${i ? "L" : "M"}${p.x.toFixed(2)},${p.y.toFixed(2)}`).join("") + "Z").join("")}" fill="${yearColor(f.year)}" fill-rule="evenodd" stroke="${isSelected(f) ? "#ffffff" : "#050506"}" stroke-width="${isSelected(f) ? 3 : 0.6}" opacity="${isSelected(f) ? 1 : 0.7}"/>`,
     )
     .join("");
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630"><defs><clipPath id="map"><rect x="570" y="0" width="630" height="630"/></clipPath></defs><rect width="1200" height="630" fill="#050506"/><g clip-path="url(#map)">${paths}</g><g font-family="Anton" fill="#fff4fe"><text x="48" y="80" font-size="30">New Age of the City</text><text x="48" y="220" font-size="40">${s.year === null ? "Year built" : "Built in"}</text><text x="48" y="345" font-size="116" fill="${yearColor(s.year)}">${s.year ?? "unknown"}</text><text x="48" y="410" font-size="28">${s.year === null ? "Year built unknown" : s.year > epoch ? `As of ${epoch}` : `${epoch - s.year} years old · ${epoch}`}</text><text x="48" y="535" font-size="22">${s.lat.toFixed(6)}, ${s.lng.toFixed(6)}</text><text x="48" y="580" font-size="22">ageofthe.city · Portland, Oregon</text></g></svg>`;

@@ -1,3 +1,4 @@
+import { OgBudget } from "./og-budget";
 import { PMTiles } from "pmtiles";
 import { VectorTile } from "@mapbox/vector-tile";
 import { PbfReader } from "pbf";
@@ -61,16 +62,31 @@ export async function loadShapes(
     }),
   );
 }
+export interface OgServices {
+  archive: (env: TilesEnv) => Pick<PMTiles, "getHeader" | "getZxy">;
+  loadShapes: typeof loadShapes;
+  renderPng: (svg: string) => Promise<Uint8Array>;
+  budget: OgBudget;
+}
+
+const cardServices: OgServices = {
+  archive,
+  loadShapes,
+  renderPng: async (svg) => (await import("./og-render")).renderPng(svg),
+  budget: new OgBudget(),
+};
+
 export async function handleOg(
   request: Request,
   env: TilesEnv,
   ctx: ExecutionContext,
+  services = cardServices,
 ): Promise<Response> {
   const url = new URL(request.url),
     s = parseSelection(url);
   if (!s) return Response.redirect(new URL("/share.png", url.origin).href, 302);
   try {
-    const p = archive(env),
+    const p = services.archive(env),
       h = await p.getHeader();
     const epochRaw = url.searchParams.get("asof");
     const epoch =
@@ -79,29 +95,42 @@ export async function handleOg(
     const key = new Request(m.image);
     const hit = await caches.default.match(key);
     if (hit) {
-      const r = new Response(hit.body, hit);
+      const r = new Response(request.method === "HEAD" ? null : hit.body, hit);
       r.headers.set("X-OG-Cache", "HIT");
       if (url.searchParams.get("v") !== h.etag || epochRaw !== String(epoch))
         r.headers.set("Cache-Control", "public, max-age=300");
       return r;
     }
-    const shapes = await loadShapes(p, s, Math.max(h.minZoom, Math.min(15, h.maxZoom)));
-    const { renderPng } = await import("./og-render");
-    const png = await renderPng(cardSvg(s, shapes, epoch));
+    const work = services.budget.run(key.url, async () => {
+      const shapes = await services.loadShapes(p, s, Math.max(h.minZoom, Math.min(15, h.maxZoom)));
+      const png = await services.renderPng(cardSvg(s, shapes, epoch));
+      // Keep coalescing active until the immutable cache entry is stored.
+      await caches.default.put(key, new Response(png as Uint8Array<ArrayBuffer>, {
+        headers: {
+          "Content-Type": "image/png",
+          "X-Content-Type-Options": "nosniff",
+          "Cache-Control": "public, max-age=31536000, immutable",
+        },
+      }));
+      return png;
+    });
+    if (!work) {
+      return new Response(null, {
+        status: 302,
+        headers: { Location: new URL("/share.png", url.origin).href, "Cache-Control": "no-store" },
+      });
+    }
+    ctx.waitUntil(work.then(() => undefined, () => undefined));
+    const png = await work;
     const versioned = url.searchParams.get("v") === h.etag && epochRaw === String(epoch);
-    const response = new Response(png as Uint8Array<ArrayBuffer>, {
+    return new Response(request.method === "HEAD" ? null : png as Uint8Array<ArrayBuffer>, {
       headers: {
         "Content-Type": "image/png",
         "X-Content-Type-Options": "nosniff",
         "Cache-Control": versioned ? "public, max-age=31536000, immutable" : "public, max-age=300",
+        "X-OG-Cache": "MISS",
       },
     });
-    // Store immutable bytes under the normalized archive and calendar version.
-    const stored = new Response(response.clone().body, response);
-    stored.headers.set("Cache-Control", "public, max-age=31536000, immutable");
-    ctx.waitUntil(caches.default.put(key, stored));
-    response.headers.set("X-OG-Cache", "MISS");
-    return response;
   } catch (error) {
     console.error("Building card failed", error);
     return Response.redirect(new URL("/share.png", url.origin).href, 302);
