@@ -1,0 +1,70 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+// The MapLibre stylesheet comes first, so the overrides in map.css win
+// where their selectors have the same specificity.
+import "maplibre-gl/dist/maplibre-gl.css";
+import "../styles/map.css";
+---
+
+<BaseLayout
+  title="New Age of the City"
+  description="A map of Portland, Oregon's buildings colored by the year each was built, from the City of Portland's Building Footprints data."
+  imageAlt="Map of central Portland with buildings colored by the year each was built"
+>
+  <aside class="panel info" aria-labelledby="title">
+    <details id="info">
+      <summary>
+        <h1 id="title">New Age of the City</h1>
+      </summary>
+      <p>
+        This map shows Portland's buildings colored by the year each was built, where the City's
+        data records it, and shows other buildings as &ldquo;unknown.&rdquo;
+      </p>
+      <p>
+        Based on Justin Palmer's 2013 map, &ldquo;<a
+          href="https://blog.mapbox.com/portland-the-age-of-a-city-19823fd62c60"
+          >Portland, Oregon: The Age of a City</a
+        >.&rdquo;
+      </p>
+      <p>
+        Data: <a href="https://gis-pdx.opendata.arcgis.com/datasets/building-footprints"
+          >Building Footprints</a
+        > from the City of Portland Bureau of Planning and Sustainability.
+      </p>
+      <p>A project of <a href="https://formfollowsfunction.org/">Form Follows Function</a></p>
+      <noscript>
+        <p>
+          This map needs JavaScript to draw Portland's buildings. The Building Footprints data
+          link above describes the source data.
+        </p>
+      </noscript>
+    </details>
+  </aside>
+
+  <main id="map" aria-label="Map of Portland buildings colored by the year each was built"></main>
+
+  <aside class="panel legend" aria-labelledby="legend-title">
+    <details open>
+      <summary id="legend-title">Year Built</summary>
+      <div
+        class="ramp"
+        role="img"
+        aria-label="Color scale: aquamarine for buildings from 1885 and earlier, blue for the 1920s and 1930s, purple for the 1950s, hot pink for the 1970s, and pink fading to white for the newest buildings."
+      >
+        <div class="ramp-bar"></div>
+        <div class="ramp-labels">
+          <span class="y1900">1900</span>
+          <span class="y1950">1950</span>
+          <span class="y2000">2000</span>
+        </div>
+      </div>
+      <ul>
+        <li><span class="swatch unknown" aria-hidden="true"></span>unknown</li>
+      </ul>
+    </details>
+  </aside>
+
+  <script>
+    import "../scripts/map";
+  </script>
+</BaseLayout>

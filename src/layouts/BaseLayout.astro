@@ -1,0 +1,23 @@
+---
+import BaseHead from "../components/BaseHead.astro";
+import "../styles/global.css";
+
+type Props = {
+  title: string;
+  description: string;
+  imageAlt: string;
+  noindex?: boolean;
+};
+const { title, description, imageAlt, noindex } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <BaseHead title={title} description={description} imageAlt={imageAlt} noindex={noindex} />
+    <slot name="head" />
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>

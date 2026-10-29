@@ -1,0 +1,28 @@
+// Workers static assets serves the Astro build in dist/. The Worker in
+// worker/index.ts runs first for every request, so that it can redirect www,
+// redirect slashless page URLs, and serve the PMTiles archive from R2.
+{
+  "name": "ageofthe-city",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-10-23",
+  // Serve only on the custom domains, not on workers.dev or preview URLs.
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    { "pattern": "ageofthe.city", "custom_domain": true },
+    { "pattern": "www.ageofthe.city", "custom_domain": true },
+  ],
+  "build": {
+    "command": "npm run build",
+    "watch_dir": ["src", "public", "integrations"],
+  },
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "404-page",
+    "run_worker_first": true,
+  },
+  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "ageofthe-city" }],
+  "vars": { "CANONICAL_HOST": "ageofthe.city" },
+  "observability": { "enabled": true, "traces": { "enabled": true } },
+}

@@ -117,8 +117,9 @@ pmtiles show data/portland_buildings.pmtiles
 
 ## 3) Run the site locally
 
-The `worker/` directory holds the Cloudflare Worker for https://ageofthe.city/.
-It serves the page in `frontend/` as static assets
+The site is an Astro project at the repository root,
+with its pages in `src/` and the Cloudflare Worker in `worker/`.
+The Worker serves the Astro build in `dist/` as static assets
 and the tiles from a PMTiles archive in R2, at the same origin:
 
 - `/tiles/portland_buildings.json` returns TileJSON.
@@ -130,17 +131,19 @@ and the tiles from a PMTiles archive in R2, at the same origin:
 - `www.ageofthe.city` redirects to `ageofthe.city` with a 308.
 
 The build step (`npm run build`, which Wrangler runs before `dev` and `deploy`)
-copies `frontend/` and the MapLibre GL JS files from `node_modules`
-into `worker/dist/`.
-It requires Node.js 22.18 or later.
+builds the Astro site into `dist/`.
+Astro also checks that every internal link uses the site's one URL form,
+with a trailing slash.
+The build requires Node.js 22.23.4 or later.
+`npm run check` type-checks the site and the Worker,
+and `npm test` runs their unit tests.
 
 Upload the tileset to local R2 and start the development server:
 
 ```bash
-cd worker
 npm install
 npx wrangler r2 object put ageofthe-city/portland_buildings.pmtiles \
-  --file=../data/portland_buildings.pmtiles --local
+  --file=data/portland_buildings.pmtiles --local
 npm run dev
 ```
 
@@ -156,11 +159,10 @@ If your Wrangler login has access to more than one account,
 set `CLOUDFLARE_ACCOUNT_ID` first.
 
 ```bash
-cd worker
 npm install
 npx wrangler r2 bucket create ageofthe-city
 npx wrangler r2 object put ageofthe-city/portland_buildings.pmtiles \
-  --file=../data/portland_buildings.pmtiles --remote
+  --file=data/portland_buildings.pmtiles --remote
 npm run deploy
 ```
 

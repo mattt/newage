@@ -1,0 +1,46 @@
+---
+// The shared <head> contents: title and description, the canonical URL, Open
+// Graph and Twitter card tags, and the icons. Put it first in each layout's
+// <head>. The icon files come from the endpoints in src/pages/; the share
+// image is the site's own 1200x630 map screenshot in public/.
+
+const SITE_NAME = "New Age of the City";
+const SHARE_IMAGE = { width: 1200, height: 630, type: "image/jpeg" } as const;
+
+type Props = {
+  title: string;
+  description: string;
+  /** A share image path, such as /og-image.jpg, at 1200x630. */
+  image?: string;
+  /** A plain description of the share image. */
+  imageAlt: string;
+  /** Keeps the page out of search results and gives it no canonical URL, as on the 404 page. */
+  noindex?: boolean;
+};
+const { title, description, image = "/og-image.jpg", imageAlt, noindex = false } = Astro.props;
+const canonical = noindex ? undefined : new URL(Astro.url.pathname, Astro.site).href;
+---
+
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>{title}</title>
+<meta name="description" content={description} />
+{noindex && <meta name="robots" content="noindex" />}
+{canonical && <link rel="canonical" href={canonical} />}
+{canonical && <meta property="og:url" content={canonical} />}
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content={SITE_NAME} />
+<meta property="og:locale" content="en_US" />
+<meta property="og:title" content={title} />
+<meta property="og:description" content={description} />
+<meta property="og:image" content={new URL(image, Astro.site).href} />
+<meta property="og:image:width" content={String(SHARE_IMAGE.width)} />
+<meta property="og:image:height" content={String(SHARE_IMAGE.height)} />
+<meta property="og:image:type" content={SHARE_IMAGE.type} />
+<meta property="og:image:alt" content={imageAlt} />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="theme-color" content="#050506" />
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="icon" type="image/png" sizes="96x96" href="/favicon-96.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />

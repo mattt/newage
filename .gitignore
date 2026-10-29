@@ -5,7 +5,7 @@ __pycache__/
 .env
 
 # Data artifacts
-data/
+/data/
 *.shp
 *.shx
 *.dbf
@@ -27,6 +27,7 @@ yarn-error.log*
 # Build outputs
 dist/
 build/
+.astro/
 
 # Wrangler
 .wrangler/

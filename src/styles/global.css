@@ -149,53 +149,7 @@ body {
 /* The color matches UNKNOWN in app.js. */
 .unknown { background: #3a3a3d; }
 
-/* Match MapLibre's popup and controls to the dark panels. */
-.maplibregl-popup-content {
-  background: var(--panel);
-  color: var(--text);
-  border: 1px solid var(--panel-border);
-  box-shadow: 0 2px 10px rgb(0 0 0 / 0.6);
-}
-
-.maplibregl-popup-anchor-top .maplibregl-popup-tip,
-.maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
-.maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
-  border-bottom-color: var(--panel);
-}
-
-.maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
-.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
-.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
-  border-top-color: var(--panel);
-}
-
-.maplibregl-popup-anchor-left .maplibregl-popup-tip {
-  border-right-color: var(--panel);
-}
-
-.maplibregl-popup-anchor-right .maplibregl-popup-tip {
-  border-left-color: var(--panel);
-}
-
-.maplibregl-ctrl-group:not(:empty) {
-  background: var(--panel);
-  border: 1px solid var(--panel-border);
-  box-shadow: 0 2px 10px rgb(0 0 0 / 0.6);
-}
-
-.maplibregl-ctrl-group button + button {
-  border-top-color: var(--panel-border);
-}
-
-.maplibregl-ctrl button .maplibregl-ctrl-icon {
-  filter: invert(1);
-}
-
-.maplibregl-ctrl button:not(:disabled):hover {
-  background-color: rgb(255 255 255 / 0.08);
-}
-
-@media (max-width: 600px) {
+@media (width <= 37.5rem) {
   :root {
     font-size: 12px;
   }
@@ -219,5 +173,38 @@ body {
   .swatch {
     width: 12px;
     height: 12px;
+  }
+}
+
+/* The 404 page uses a panel in normal flow instead of over the map. */
+.not-found {
+  position: static;
+  max-width: 20rem;
+  margin: 10px;
+}
+
+.not-found h1 {
+  font-size: 1rem;
+  margin: 0 0 0.6em;
+}
+
+.not-found p {
+  margin: 0.6em 0 0;
+}
+
+.not-found a {
+  color: var(--link);
+}
+
+.not-found :focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Without JavaScript there is no map, so the legend would describe nothing. */
+@media (scripting: none) {
+  .legend {
+    display: none;
   }
 }

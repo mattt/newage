@@ -1,0 +1,31 @@
+{
+  "name": "ageofthe-city",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "astro build",
+    "check": "astro check && tsc -p worker/tsconfig.json",
+    "test": "vp test run",
+    "dev": "wrangler dev --infer-origin-from-routes=false",
+    "dev:astro": "astro dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@astrojs/sitemap": "3.7.4",
+    "astro": "7.4.4",
+    "maplibre-gl": "6.16.0",
+    "pmtiles": "4.5.0",
+    "sharp": "0.35.5"
+  },
+  "devDependencies": {
+    "@astrojs/check": "0.9.12",
+    "@cloudflare/workers-types": "5.20261026.1",
+    "@types/node": "26.6.6",
+    "hast-util-select": "6.0.4",
+    "rehype-parse": "9.0.1",
+    "typescript": "6.0.3",
+    "unified": "11.0.5",
+    "vite-plus": "1.4.0",
+    "wrangler": "4.153.0"
+  }
+}

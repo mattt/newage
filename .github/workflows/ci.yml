@@ -13,13 +13,10 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  worker:
-    name: Worker
+  site:
+    name: Site
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    defaults:
-      run:
-        working-directory: worker
     env:
       WRANGLER_SEND_METRICS: "false"
     steps:
@@ -31,7 +28,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: worker/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -39,7 +36,10 @@ jobs:
       - name: Type check
         run: npm run check
 
-      - name: Build frontend
+      - name: Test
+        run: npm test
+
+      - name: Build site
         run: npm run build
 
       - name: Bundle Worker
