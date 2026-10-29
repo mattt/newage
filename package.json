@@ -12,14 +12,19 @@
   },
   "dependencies": {
     "@astrojs/sitemap": "3.7.4",
+    "@mapbox/vector-tile": "3.0.0",
+    "@resvg/resvg-wasm": "2.6.2",
     "astro": "7.4.4",
+    "culori": "4.0.2",
     "maplibre-gl": "6.16.0",
+    "pbf": "5.1.2",
     "pmtiles": "4.5.0",
     "sharp": "0.35.5"
   },
   "devDependencies": {
     "@astrojs/check": "0.9.12",
     "@cloudflare/workers-types": "5.20261026.1",
+    "@types/culori": "4.0.1",
     "@types/node": "26.6.6",
     "hast-util-select": "6.0.4",
     "rehype-parse": "9.0.1",

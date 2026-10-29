@@ -2,22 +2,22 @@
 // The shared <head> contents: title and description, the canonical URL, Open
 // Graph and Twitter card tags, and the icons. Put it first in each layout's
 // <head>. The icon files come from the endpoints in src/pages/; the share
-// image is the site's own 1200x630 map screenshot in public/.
+// image is the site's own 1200x630 map screenshot generated at build time.
 
 import { SITE_NAME } from "../lib/site";
-const SHARE_IMAGE = { width: 1200, height: 630, type: "image/jpeg" } as const;
+import { SHARE_IMAGE } from "../lib/share-image";
 
 type Props = {
   title: string;
   description: string;
-  /** A share image path, such as /og-image.jpg, at 1200x630. */
+  /** A share image path, such as /share.png, at 1200x630. */
   image?: string;
   /** A plain description of the share image. */
   imageAlt: string;
   /** Keeps the page out of search results and gives it no canonical URL, as on the 404 page. */
   noindex?: boolean;
 };
-const { title, description, image = "/og-image.jpg", imageAlt, noindex = false } = Astro.props;
+const { title, description, image = "/share.png", imageAlt, noindex = false } = Astro.props;
 const canonical = noindex ? undefined : new URL(Astro.url.pathname, Astro.site).href;
 ---
 
@@ -38,6 +38,9 @@ const canonical = noindex ? undefined : new URL(Astro.url.pathname, Astro.site).
 <meta property="og:image:height" content={String(SHARE_IMAGE.height)} />
 <meta property="og:image:type" content={SHARE_IMAGE.type} />
 <meta property="og:image:alt" content={imageAlt} />
+<meta name="twitter:title" content={title} />
+<meta name="twitter:description" content={description} />
+<meta name="twitter:image" content={new URL(image, Astro.site).href} />
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="color-scheme" content="dark" />
 <link rel="manifest" href="/manifest.webmanifest" />

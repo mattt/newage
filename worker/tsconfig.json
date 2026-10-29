@@ -9,5 +9,5 @@
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["index.ts", "tiles.ts", "shared.ts"]
+  "include": ["index.ts", "tiles.ts", "shared.ts", "og.ts", "assets.d.ts"]
 }
