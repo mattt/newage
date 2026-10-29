@@ -7,6 +7,7 @@
 // and select the building at a chosen address, and the map sends
 // "newage:selected" with { bldgId, yearBuilt, lat, lng, properties }
 // after it opens the popup for a building.
+import { canSelectSearch } from "../lib/search-selection";
 import { canFillAddress, hasAddress, type SelectionKey } from "../lib/address-lookup";
 
 interface SearchResult {
@@ -51,7 +52,7 @@ if (form && input && popup && list && status) {
   };
 
   const open = () => {
-    if (results.length === 0) return;
+    if (results.length === 0 || !canSelectSearch(input.value, answered)) return;
     popup.hidden = false;
     input.setAttribute("aria-expanded", "true");
   };
@@ -68,6 +69,7 @@ if (form && input && popup && list && status) {
   };
 
   const choose = (index: number) => {
+    if (!canSelectSearch(input.value, answered)) return;
     const result = results[index];
     if (!result) return;
     input.value = result.label;
@@ -132,6 +134,10 @@ if (form && input && popup && list && status) {
     clearTimeout(timer);
     // An answer for the earlier text would only flash before the next one.
     controller?.abort();
+    results = [];
+    answered = "";
+    list.replaceChildren();
+    close();
     const query = normalize(input.value);
     if (query.length < MIN_LENGTH) {
       results = [];
@@ -181,7 +187,7 @@ if (form && input && popup && list && status) {
     event.preventDefault();
     const query = normalize(input.value);
     if (query.length < MIN_LENGTH) return;
-    if (query === answered) {
+    if (canSelectSearch(input.value, answered)) {
       if (results.length === 1) choose(0);
       else open();
     } else {

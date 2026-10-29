@@ -1,3 +1,7 @@
+import { GeocodeBudget } from "./geocode-budget";
+
+const providerBudget = new GeocodeBudget();
+
 // Address search and reverse geocoding for the map, through Photon
 // (https://photon.komoot.io), which geocodes OpenStreetMap data.
 // The Content Security Policy allows connections only to this origin,
@@ -243,7 +247,7 @@ function lookup(url: URL): Lookup {
 }
 
 /** Serves `/geocode/search?q=` and `/geocode/reverse?lat=&lng=`. */
-export async function handleGeocode(request: Request, ctx: ExecutionContext): Promise<Response> {
+export async function handleGeocode(request: Request, ctx: ExecutionContext, budget = providerBudget): Promise<Response> {
   const found = lookup(new URL(request.url));
   if (found instanceof Response) return found;
 
@@ -252,12 +256,27 @@ export async function handleGeocode(request: Request, ctx: ExecutionContext): Pr
   let response = await cache.match(cacheKey);
   if (!response) {
     try {
-      response = json(await found.load(), 200, CACHED);
+      const work = budget.run(cacheKey.url, async () => {
+        const body = JSON.stringify(await found.load());
+        // Keep coalescing active until the cache write finishes.
+        await cache.put(cacheKey, new Response(body, {
+          headers: { "Content-Type": "application/json", "Cache-Control": CACHED },
+        }));
+        return body;
+      });
+      if (!work) {
+        const limited = json({ error: "Too many address lookups. Try again shortly." }, 429, NO_STORE);
+        limited.headers.set("Retry-After", "3");
+        return limited;
+      }
+      ctx.waitUntil(work.then(() => undefined, () => undefined));
+      response = new Response(await work, {
+        headers: { "Content-Type": "application/json", "Cache-Control": CACHED },
+      });
     } catch (error) {
       console.error("Geocoding request failed", found.cacheUrl.pathname, error);
       return json({ error: "The geocoding service is unavailable." }, 502, NO_STORE);
     }
-    ctx.waitUntil(cache.put(cacheKey, response.clone()));
   }
 
   if (request.method === "HEAD") {

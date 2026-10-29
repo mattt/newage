@@ -114,3 +114,7 @@
     display: none;
   }
 }
+
+@media (scripting: none) {
+  .search { display: none; }
+}

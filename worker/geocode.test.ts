@@ -1,3 +1,4 @@
+import { GeocodeBudget } from "./geocode-budget";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import {
   handleGeocode,
@@ -136,6 +137,7 @@ describe("parseCoordinate", () => {
 });
 
 describe("handleGeocode", () => {
+  let budget: GeocodeBudget;
   let store: Map<string, Response>;
   let pending: Promise<unknown>[];
   let fetchMock: ReturnType<typeof vi.fn>;
@@ -145,12 +147,13 @@ describe("handleGeocode", () => {
   } as unknown as ExecutionContext;
 
   const request = (path: string, method = "GET") =>
-    handleGeocode(new Request(`https://example.com${path}`, { method }), ctx);
+    handleGeocode(new Request(`https://example.com${path}`, { method }), ctx, budget);
 
   const providerAnswers = (body: unknown, status = 200) =>
     fetchMock.mockResolvedValue(new Response(JSON.stringify(body), { status }));
 
   beforeEach(() => {
+    budget = new GeocodeBudget(() => 0);
     store = new Map();
     pending = [];
     fetchMock = vi.fn();
@@ -297,5 +300,36 @@ describe("handleGeocode", () => {
     expect(response.status).toBe(400);
     expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
     expect(env.ASSETS.fetch).not.toHaveBeenCalled();
+  });
+
+  it("limits uncached calls while cached answers remain free", async () => {
+    // A new Response for each provider call, as real fetch supplies.
+    fetchMock.mockImplementation(async () => new Response('{"features":[]}'));
+    for (let i = 0; i < 20; i++) expect((await request(`/geocode/search?q=query${i}`)).status).toBe(200);
+    const limited = await request("/geocode/search?q=overbudget");
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("Retry-After")).toBe("3");
+    expect(limited.headers.get("Cache-Control")).toBe("no-store");
+    expect(fetchMock).toHaveBeenCalledTimes(20);
+    expect((await request("/geocode/search?q=query0")).status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(20);
+  });
+
+  it("coalesces simultaneous misses and caps provider concurrency", async () => {
+    let finish!: () => void;
+    const gate = new Promise<void>((resolve) => { finish = resolve; });
+    fetchMock.mockImplementation(async () => {
+      await gate;
+      return new Response('{"features":[]}');
+    });
+    const first = request("/geocode/search?q=shared");
+    const same = request("/geocode/search?q=shared");
+    const second = request("/geocode/search?q=other");
+    expect((await request("/geocode/search?q=third")).status).toBe(429);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    finish();
+    const responses = await Promise.all([first, same, second]);
+    expect(await responses[0].json()).toEqual(await responses[1].json());
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
