@@ -39,14 +39,26 @@ jobs:
           bash scripts/build_tiles.sh
           pmtiles show data/portland_buildings.pmtiles
           pmtiles verify data/portland_buildings.pmtiles
-      - name: Upload tiles when credentials are available
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      - name: Record inspection output
         run: |
-          if [[ -n "$CLOUDFLARE_ACCOUNT_ID" && -n "$CLOUDFLARE_API_TOKEN" ]]; then
-            npx wrangler r2 object put ageofthe-city/portland_buildings.pmtiles \
-              --file=data/portland_buildings.pmtiles --remote
-          else
-            echo "::notice::Skipping R2 upload: CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN secrets are both required."
-          fi
+          pmtiles show data/portland_buildings.pmtiles > data/pmtiles-show.txt
+          shasum -a 256 data/portland_buildings.pmtiles src/data/building-stats.json > data/SHA256SUMS
+      - name: Store review artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: buildings-${{ github.run_id }}
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            data/portland_buildings.pmtiles
+            src/data/building-stats.json
+            data/pmtiles-show.txt
+            data/SHA256SUMS
+      - name: Explain publication requirements
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
+          Building data was rebuilt and verified. Download and inspect the workflow artifact.
+          The archive and statistics require separate approved publication.
+          Update the committed statistics through a pull request and coordinate the archive upload with the site deployment.
+          This workflow does not publish to R2 or deploy the site.
+          SUMMARY

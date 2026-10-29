@@ -148,13 +148,16 @@ with `workflow_dispatch` and on the first day of each month at 10:17 UTC.
 GitHub runs scheduled workflows from the default branch once the workflow is merged there.
 It uses a macOS runner and `brew bundle`, tests the transformations,
 rebuilds the data and statistics, and builds and verifies the archive.
-It uploads to `ageofthe-city/portland_buildings.pmtiles` only when both repository
-secrets `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` are present.
-The token needs permission to write R2 objects in that account.
-Otherwise, the workflow prints a notice and skips the upload.
-The workflow does not commit statistics or deploy the site.
-To publish updated statistics, run the pipeline locally and commit
-`src/data/building-stats.json` with the site changes.
+The workflow stores the PMTiles archive, regenerated statistics JSON,
+`pmtiles show` output, and SHA-256 hashes as an artifact for 30 days.
+It uses no Cloudflare credentials and never uploads or deploys.
+
+Download the artifact from the completed workflow run.
+Inspect the archive metadata and verify its hashes before publication.
+Open a pull request that updates `src/data/building-stats.json` from the artifact.
+Uploading the archive to R2 is a separate approved operation;
+coordinate it with deployment of the site containing the matching statistics.
+Keep the previous archive available for rollback.
 
 ## 3) Run the site locally
 
