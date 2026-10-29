@@ -313,7 +313,7 @@ function closePopup() {
  * buildings near the point, or else the one at the point.
  * Returns whether it found one.
  */
-function selectAt(lngLat: { lng: number; lat: number }, bldgId?: string): boolean {
+function selectAt(lngLat: { lng: number; lat: number }, bldgId?: string, focus = false): boolean {
   const point = map.project(lngLat);
   const radius = 24;
   let feature: MapGeoJSONFeature | undefined;
@@ -331,14 +331,30 @@ function selectAt(lngLat: { lng: number; lat: number }, bldgId?: string): boolea
   // The share link's coordinates came from the whole footprint, which the
   // tiles at this zoom may clip differently; keep them so the link stays the same.
   if (feature) {
-    select(feature, lngLat, { focus: false, position: lngLat });
+    select(feature, lngLat, { focus, position: lngLat });
     return true;
   }
   feature = map.queryRenderedFeatures(point, { layers: [FILL] })[0];
   if (!feature) return false;
-  select(feature, lngLat, { focus: false });
+  select(feature, lngLat, { focus });
   return true;
 }
+
+// Only the canvas handles this action; popup controls retain their own keys.
+const canvas = map.getCanvas();
+canvas.setAttribute("aria-describedby", "map-keyboard-hint");
+const centerMarker = document.createElement("div");
+centerMarker.className = "keyboard-center";
+centerMarker.setAttribute("aria-hidden", "true");
+map.getContainer().append(centerMarker);
+canvas.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" || event.target !== canvas || !styleLoaded) return;
+  event.preventDefault();
+  flight++;
+  if (!selectAt(map.getCenter(), undefined, true)) {
+    announce("No building at the map center. Use the arrow keys to move the map and try again.");
+  }
+});
 
 map.on("click", (event) => {
   const [feature] = map.queryRenderedFeatures(event.point, { layers: [FILL] });

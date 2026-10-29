@@ -132,3 +132,26 @@
 .maplibregl-ctrl-shrink .maplibregl-ctrl-icon {
   filter: invert(1);
 }
+
+/* The center target appears only when the canvas has keyboard focus. */
+.keyboard-center {
+  display: none;
+  position: absolute;
+  inset-inline-start: 50%;
+  inset-block-start: 50%;
+  inline-size: 1rem;
+  block-size: 1rem;
+  border: 2px solid var(--focus);
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--background);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+#map:has(.maplibregl-canvas:focus-visible) .keyboard-center {
+  display: block;
+}
+
+@media (forced-colors: active) {
+  .keyboard-center { border-color: Highlight; }
+}
