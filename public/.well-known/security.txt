@@ -1,0 +1,4 @@
+Contact: https://formfollowsfunction.org/
+Expires: 2027-10-29T00:00:00Z
+Canonical: https://ageofthe.city/.well-known/security.txt
+Preferred-Languages: en
