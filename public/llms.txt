@@ -1,0 +1,21 @@
+# New Age of the City
+
+An interactive map of Portland, Oregon's building footprints,
+colored by the recorded year built.
+Buildings without a recorded year appear as unknown.
+The home page includes a static map and decade table when JavaScript is disabled.
+
+## Source and license
+
+The City of Portland Bureau of Planning and Sustainability publishes the
+[Building Footprints dataset](https://gis-pdx.opendata.arcgis.com/datasets/building-footprints).
+The data is available under the
+[Open Data Commons Public Domain Dedication and License 1.0](https://opendatacommons.org/licenses/pddl/1-0/).
+
+## Map data
+
+- [TileJSON](https://ageofthe.city/tiles/portland_buildings.json) describes the vector tiles.
+- Vector tiles use `/tiles/portland_buildings/{z}/{x}/{y}.mvt` on this origin.
+- Share links use `/?building={id}&year={year}&lat={lat}&lng={lng}`.
+  The building ID identifies a footprint; year is its recorded year built.
+  Latitude and longitude set the map location in decimal degrees.

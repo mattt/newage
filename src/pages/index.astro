@@ -4,13 +4,18 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 // where their selectors have the same specificity.
 import "maplibre-gl/dist/maplibre-gl.css";
 import "../styles/map.css";
+import StaticMap from "../components/StaticMap.astro";
+import { DESCRIPTION } from "../lib/site";
+import { serializeStructuredData } from "../lib/structured-data";
+const jsonLd = serializeStructuredData(Astro.site!);
 ---
 
 <BaseLayout
   title="New Age of the City"
-  description="A map of Portland, Oregon's buildings colored by the year each was built, from the City of Portland's Building Footprints data."
+  description={DESCRIPTION}
   imageAlt="Map of central Portland with buildings colored by the year each was built"
 >
+  <script slot="head" is:inline type="application/ld+json" set:html={jsonLd} />
   <aside class="panel info" aria-labelledby="title">
     <details id="info">
       <summary>
@@ -32,14 +37,9 @@ import "../styles/map.css";
         > from the City of Portland Bureau of Planning and Sustainability.
       </p>
       <p>A project of <a href="https://formfollowsfunction.org/">Form Follows Function</a></p>
-      <noscript>
-        <p>
-          This map needs JavaScript to draw Portland's buildings. The Building Footprints data
-          link above describes the source data.
-        </p>
-      </noscript>
     </details>
   </aside>
+  <StaticMap />
 
   <main id="map" aria-label="Map of Portland buildings colored by the year each was built"></main>
 
