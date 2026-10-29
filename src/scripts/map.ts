@@ -1,14 +1,27 @@
-import { Map, NavigationControl, Popup } from "/vendor/maplibre-gl/maplibre-gl.mjs";
+import {
+  Map,
+  NavigationControl,
+  Popup,
+  setWorkerUrl,
+  type ExpressionSpecification,
+} from "maplibre-gl";
+// The bundled build cannot find MapLibre's worker next to its own file, as
+// the prebuilt build does, so emit the worker as an asset and name it here.
+// It stays on this origin, so worker-src 'self' in public/_headers allows it.
+import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
+
+setWorkerUrl(workerUrl);
 
 // Show the info panel open on wider screens; on phones it starts collapsed.
-if (window.matchMedia("(min-width: 601px)").matches) {
-  document.getElementById("info").open = true;
+const info = document.getElementById("info");
+if (info instanceof HTMLDetailsElement && window.matchMedia("(width > 37.5rem)").matches) {
+  info.open = true;
 }
 
 // Colors follow the palette of Justin Palmer's 2013 map:
 // aquamarine for the oldest buildings, purple for the 1950s,
 // and hot pink fading to white for the newest.
-// The legend gradient in style.css uses the same stops.
+// The legend gradient in global.css uses the same stops.
 const BACKGROUND = "#050506";
 const UNKNOWN = "#3a3a3d";
 const YEAR_STOPS = [
@@ -23,7 +36,15 @@ const YEAR_STOPS = [
   2025, "#fff4fe",
 ];
 
-const yearBuilt = ["to-number", ["get", "year_built"], -1];
+// The expression arrays mix numbers and colors, so build them untyped
+// and hand them to the style as expressions.
+const yearBuilt = ["to-number", ["get", "year_built"], -1] as unknown as ExpressionSpecification;
+const fillColor = [
+  "case",
+  ["<", yearBuilt, 0],
+  UNKNOWN,
+  ["interpolate-lab", ["linear"], yearBuilt, ...YEAR_STOPS],
+] as unknown as ExpressionSpecification;
 
 const map = new Map({
   container: "map",
@@ -49,14 +70,7 @@ const map = new Map({
         type: "fill",
         source: "buildings",
         "source-layer": "buildings",
-        paint: {
-          "fill-color": [
-            "case",
-            ["<", yearBuilt, 0],
-            UNKNOWN,
-            ["interpolate-lab", ["linear"], yearBuilt, ...YEAR_STOPS],
-          ],
-        },
+        paint: { "fill-color": fillColor },
       },
       // A hairline in the background color separates adjacent buildings
       // when they are large enough to show it.

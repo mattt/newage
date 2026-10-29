@@ -1,0 +1,20 @@
+# Security headers for every response from the assets,
+# including the pages that the Worker gets with env.ASSETS.fetch.
+# A response that the Worker builds itself, such as a redirect or a tile,
+# does not get them.
+# MapLibre loads its worker from this origin, so the policy needs
+# no blob: worker source.
+/*
+  Strict-Transport-Security: max-age=31536000
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: accelerometer=(), camera=(), display-capture=(), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), usb=()
+
+# No Cache-Control on /*:
+# matching rules combine,
+# so it would join the immutable value below.
+# Other files keep the default, public, max-age=0, must-revalidate.
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable
