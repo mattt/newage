@@ -1,0 +1,116 @@
+/*
+ * The search panel sits under the info panel, whose height changes when it opens.
+ * Where the browser supports anchor positioning, the search panel follows it;
+ * elsewhere it sits where the closed info panel ends.
+ */
+.info {
+  anchor-name: --info;
+}
+
+.search {
+  top: 54px;
+  width: min(20rem, calc(100vw - 80px));
+  box-sizing: border-box;
+}
+
+@media (width <= 37.5rem) {
+  .search {
+    top: 48px;
+  }
+}
+
+@supports (top: anchor(bottom)) {
+  .search {
+    position-anchor: --info;
+    top: calc(anchor(bottom) + 8px);
+  }
+}
+
+.search form {
+  margin: 0;
+}
+
+/* The placeholder shows the same words, so the label is for screen readers. */
+.search-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.search input {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  padding: 4px 8px;
+  font: inherit;
+  color: var(--text);
+  background: rgb(255 255 255 / 0.06);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+}
+
+.search input::placeholder {
+  color: rgb(232 232 236 / 0.6);
+}
+
+.search input:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 0;
+}
+
+/*
+ * The list scrolls inside a short box,
+ * so that on a phone it stops above the legend.
+ */
+.search-popup ul {
+  list-style: none;
+  max-height: min(15rem, 35dvh);
+  overflow-y: auto;
+  margin: 6px 0 0;
+  padding: 0;
+}
+
+.search-popup li {
+  padding: 5px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.search-popup li[aria-selected="true"] {
+  background: rgb(127 243 255 / 0.18);
+  outline: 1px solid var(--focus);
+  outline-offset: -1px;
+}
+
+.search-attribution {
+  margin: 6px 0 0;
+  font-size: 0.85em;
+  opacity: 0.8;
+}
+
+.search-attribution a {
+  color: var(--link);
+}
+
+.search-status {
+  margin: 0;
+}
+
+.search-status:not(:empty) {
+  margin-top: 6px;
+  padding: 5px 8px;
+}
+
+.search-status.error {
+  color: #ffb4b4;
+}
+
+/* Without JavaScript the search cannot run. */
+@media (scripting: none) {
+  .search {
+    display: none;
+  }
+}

@@ -1,3 +1,4 @@
+import { GEOCODE_PREFIX, handleGeocode } from "./geocode";
 import { handleTiles, TILES_PREFIX, type TilesEnv } from "./tiles";
 
 // Serves the Astro build in dist/ and the PMTiles archive in R2 at the same
@@ -52,6 +53,10 @@ export default {
           headers: { Allow: "GET, HEAD" },
         })
       );
+    }
+
+    if (url.pathname.startsWith(GEOCODE_PREFIX)) {
+      return withNosniff(await handleGeocode(request, ctx));
     }
 
     if (url.pathname.startsWith(TILES_PREFIX)) {
