@@ -1,4 +1,5 @@
 {
+  "files": ["assets.d.ts"],
   "compilerOptions": {
     "target": "es2024",
     "module": "es2022",
@@ -9,6 +10,5 @@
     "noEmit": true,
     "skipLibCheck": true
   },
-  "files": ["assets.d.ts"],
   "include": ["index.ts", "tiles.ts", "shared.ts"]
 }
