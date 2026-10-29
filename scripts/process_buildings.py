@@ -135,7 +135,16 @@ def request_json(url, params):
             time.sleep(2**attempt)
 
 
-def download(name, directory, bounds=None):
+def validate_completeness(name, expected, downloaded, unique):
+    if downloaded != expected or unique != expected:
+        raise RuntimeError(
+            f"Incomplete {name} download: service count={expected}, "
+            f"downloaded features={downloaded}, unique OBJECTIDs={unique}. "
+            "The source may have changed during pagination; rerun the download."
+        )
+
+
+def download(name, directory):
     url = SOURCES[name]
     metadata = request_json(url, {"f": "json"})
     if not metadata.get("advancedQueryCapabilities", {}).get("supportsPagination"):
@@ -145,14 +154,7 @@ def download(name, directory, bounds=None):
         for field in metadata["fields"]
         if field["type"] == "esriFieldTypeOID"
     )
-    params = {"where": "CITYNAME = 'Portland'" if name == "city" else "1=1"}
-    if bounds is not None:
-        params.update(
-            geometry=",".join(map(str, bounds)),
-            geometryType="esriGeometryEnvelope",
-            inSR=4326,
-            spatialRel="esriSpatialRelIntersects",
-        )
+    params = {"where": "1=1"}
     count = request_json(
         url + "/query", dict(params, f="json", returnCountOnly="true")
     )["count"]
@@ -180,11 +182,13 @@ def download(name, directory, bounds=None):
     path = directory / f"{name}.geojson"
     temporary = path.with_suffix(".tmp")
     seen = set()
+    downloaded = 0
     with temporary.open("w") as output, ThreadPoolExecutor(max_workers=4) as pool:
         output.write('{"type":"FeatureCollection","features":[')
         first = True
         for features in pool.map(page, range(0, count, page_size)):
             for feature in features:
+                downloaded += 1
                 identity = feature["properties"][oid]
                 if identity in seen:
                     raise RuntimeError(
@@ -198,6 +202,16 @@ def download(name, directory, bounds=None):
             if len(seen) % 10000 < page_size:
                 print(f"Downloaded {name}: {len(seen)}/{count}", flush=True)
         output.write("]}")
+    validate_completeness(name, count, downloaded, len(seen))
+    final_count = request_json(
+        url + "/query", dict(params, f="json", returnCountOnly="true")
+    )["count"]
+    validate_completeness(name, final_count, downloaded, len(seen))
+    print(
+        f"{name} completeness: service before={count}; service after={final_count}; "
+        f"downloaded={downloaded}; unique OBJECTIDs={len(seen)}",
+        flush=True,
+    )
     temporary.replace(path)
     print(f"Downloaded {name}: {count} features from {url}", flush=True)
     return path
@@ -238,13 +252,17 @@ def main():
     args = parser.parse_args()
     args.download_dir.mkdir(parents=True, exist_ok=True)
     city = load(args.city or download("city", args.download_dir), "city")
+    before = len(city)
     city = city[city.CITYNAME.str.casefold() == "portland"]
+    print(
+        f"City selection: dropped {before - len(city)} non-Portland boundaries; kept {len(city)}",
+        flush=True,
+    )
     if city.empty:
         raise ValueError("City input must include CITYNAME=Portland")
-    bounds = city.to_crs(4326).total_bounds
     boundary = city.geometry.union_all()
     buildings = load(
-        args.buildings or download("buildings", args.download_dir, bounds), "buildings"
+        args.buildings or download("buildings", args.download_dir), "buildings"
     )
     before = len(buildings)
     # Keep whole footprints whose projected centroid is covered by the city.
@@ -260,7 +278,7 @@ def main():
         "neighborhoods",
     )
     addresses = load(
-        args.addresses or download("addresses", args.download_dir, bounds),
+        args.addresses or download("addresses", args.download_dir),
         "addresses",
         polygon=False,
     )

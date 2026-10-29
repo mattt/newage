@@ -13,6 +13,7 @@ from process_buildings import (
     format_address,
     normalize_number,
     normalize_year,
+    validate_completeness,
 )
 
 
@@ -113,6 +114,21 @@ def test_empty_stats_shape():
     }
     assert stats["total"] == stats["unknown"] == 0
     assert stats["byDecade"] == []
+
+
+def test_complete_download():
+    validate_completeness("buildings", 100, 100, 100)
+    validate_completeness("empty", 0, 0, 0)
+
+
+@pytest.mark.parametrize(
+    "downloaded,unique", [(99, 99), (100, 99), (101, 100), (101, 101)]
+)
+def test_incomplete_download(downloaded, unique):
+    with pytest.raises(
+        RuntimeError, match="service count=100.*downloaded features=.*unique OBJECTIDs="
+    ):
+        validate_completeness("buildings", 100, downloaded, unique)
 
 
 if __name__ == "__main__":

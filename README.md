@@ -22,11 +22,14 @@ then downloads GeoJSON ordered by object ID.
 
 The [Open Data portal](https://gis-pdx.opendata.arcgis.com/)
 provides the source catalog.
-The footprints cover the region, so the script first requests footprints and
-addresses that intersect Portland's bounding box to reduce download size.
-It then keeps whole footprints whose centroid is covered by the Portland city polygon.
+All four layers are downloaded in full with `where=1=1` and no spatial filter.
+Every page uses `orderByFields=OBJECTID` (or the layer's declared object ID field).
+Before processing, the script checks both feature count and unique object ID count
+against `returnCountOnly` queries made before and after each download.
+A mismatch stops the run before the downloaded file replaces the previous input.
+The script then selects the Portland city boundary and keeps whole footprints
+whose centroid is covered by that polygon.
 A footprint that crosses the city boundary can therefore extend slightly outside it.
-Neighborhood boundaries are downloaded in full.
 
 ## Workflow overview
 
@@ -49,6 +52,7 @@ This writes `data/inputs/{city,buildings,neighborhoods,addresses}.geojson`,
 `data/buildings_cleaned.ndjson`, and `src/data/building-stats.json`.
 Each run downloads fresh inputs unless a local override is supplied.
 The script retries failed requests and rejects incomplete pages or duplicate object IDs.
+It prints the service counts, downloaded counts, and unique object ID counts for each layer.
 ArcGIS does not provide a transaction across layers; retain the downloaded files
 when you need to reproduce the same input snapshot.
 
