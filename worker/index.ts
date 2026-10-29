@@ -1,5 +1,6 @@
-import { handleOg, rewriteHome } from "./og";
 import { handleTiles, TILES_PREFIX, type TilesEnv } from "./tiles";
+
+import { handleOg, rewriteHome } from "./og";
 
 // Serves the Astro build in dist/ and the PMTiles archive in R2 at the same
 // origin. wrangler.jsonc runs this Worker first for every request. Responses
