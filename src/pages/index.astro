@@ -1,4 +1,5 @@
 ---
+import YearFilter from "../components/YearFilter.astro";
 import BaseLayout from "../layouts/BaseLayout.astro";
 // The MapLibre stylesheet comes first, so the overrides in map.css win
 // where their selectors have the same specificity.
@@ -61,8 +62,21 @@ import "../styles/map.css";
       <ul>
         <li><span class="swatch unknown" aria-hidden="true"></span>unknown</li>
       </ul>
+      <YearFilter />
     </details>
   </aside>
+
+  <p id="loading" class="loading" role="status">Loading buildings&hellip;</p>
+
+  <div id="load-error" class="panel load-error" role="alert" hidden>
+    <p>The buildings could not load.</p>
+    <div class="load-error-actions">
+      <button type="button" id="load-error-retry">Retry</button>
+      <button type="button" id="load-error-dismiss">Dismiss</button>
+    </div>
+  </div>
+
+  <div id="announcer" class="visually-hidden" aria-live="polite"></div>
 
   <script>
     import "../scripts/map";
