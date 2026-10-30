@@ -1,6 +1,6 @@
-# New Age of the City
+# Age of the City
 
-![](./assets/new-age-of-the-city-screenshot.png)
+![](./public/og-image.jpg)
 
 This repo rebuilds the 2013 map ["Portland, Oregon: The Age of a City"](https://labratrevenge.com/)
 by [Justin Palmer](https://github.com/caged)

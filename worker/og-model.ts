@@ -62,7 +62,9 @@ export function metadata(url: URL, version: string) {
   for (const [k, v] of Object.entries(s))
     image.searchParams.set(k, v === null ? "unknown" : String(v));
   image.searchParams.set("v", version);
-  const title = `${s.year === null ? "Year built unknown" : `Built in ${s.year}`} — New Age of the City`;
+  // Separate renamed cards from previously cached artwork.
+  image.searchParams.set("r", "2");
+  const title = `${s.year === null ? "Year built unknown" : `Built in ${s.year}`} — Age of the City`;
   return {
     title,
     image: image.href,
@@ -104,5 +106,5 @@ export function cardSvg(s: Selection, shapes: Shape[]): string {
         `<path d="${f.rings.map((r) => r.map((p, i) => `${i ? "L" : "M"}${p.x.toFixed(2)},${p.y.toFixed(2)}`).join("") + "Z").join("")}" fill="${yearColor(f.year)}" fill-rule="evenodd" stroke="${isSelected(f) ? "#ffffff" : "#050506"}" stroke-width="${isSelected(f) ? 3 : 0.6}" opacity="${isSelected(f) ? 1 : 0.7}"/>`,
     )
     .join("");
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630"><defs><clipPath id="map"><rect x="570" y="0" width="630" height="630"/></clipPath></defs><rect width="1200" height="630" fill="#050506"/><g clip-path="url(#map)">${paths}</g><g font-family="Anton" fill="#fff4fe"><text x="48" y="80" font-size="30">New Age of the City</text><text x="48" y="220" font-size="40">${s.year === null ? "Year built" : "Built in"}</text><text x="48" y="345" font-size="116" fill="${yearColor(s.year)}">${s.year ?? "unknown"}</text><text x="48" y="535" font-size="22">${s.lat.toFixed(6)}, ${s.lng.toFixed(6)}</text><text x="48" y="580" font-size="22">ageofthe.city · Portland, Oregon</text></g></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630"><defs><clipPath id="map"><rect x="570" y="0" width="630" height="630"/></clipPath></defs><rect width="1200" height="630" fill="#050506"/><g clip-path="url(#map)">${paths}</g><g font-family="Anton" fill="#fff4fe"><text x="48" y="80" font-size="30">Age of the City</text><text x="48" y="220" font-size="40">${s.year === null ? "Year built" : "Built in"}</text><text x="48" y="345" font-size="116" fill="${yearColor(s.year)}">${s.year ?? "unknown"}</text><text x="48" y="535" font-size="22">${s.lat.toFixed(6)}, ${s.lng.toFixed(6)}</text><text x="48" y="580" font-size="22">ageofthe.city · Portland, Oregon</text></g></svg>`;
 }

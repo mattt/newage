@@ -5,7 +5,7 @@ export const GET: APIRoute = () =>
   new Response(
     JSON.stringify({
       name: SITE_NAME,
-      short_name: "New Age",
+      short_name: "Age of the City",
       description: DESCRIPTION,
       start_url: "/",
       scope: "/",

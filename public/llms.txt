@@ -1,4 +1,4 @@
-# New Age of the City
+# Age of the City
 
 An interactive map of building footprints in the Portland, Oregon region,
 colored by the recorded year built.
