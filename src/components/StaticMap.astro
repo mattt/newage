@@ -1,0 +1,65 @@
+---
+import stats from "../data/building-stats.json";
+const format = new Intl.NumberFormat("en-US");
+---
+
+<noscript>
+  <section class="static-map" aria-labelledby="static-map-title">
+    <h2 id="static-map-title">Portland's buildings by year built</h2>
+    <img src="/share.png" width="1200" height="630"
+      alt="Map of central Portland with building footprints colored from cyan for older buildings through purple and pink to white for newer buildings" />
+    <p>
+      This map colors Portland's buildings by the year each was built.
+      The dataset contains {format.format(stats.total)} buildings;{" "}
+      {format.format(stats.unknown)} have no recorded year built.
+      The interactive map needs JavaScript.
+    </p>
+    <p>
+      Source: <a href="https://gis-pdx.opendata.arcgis.com/datasets/building-footprints">Building Footprints</a>{" "}
+      from the City of Portland Bureau of Planning and Sustainability.
+    </p>
+    <table>
+      <caption>Buildings by decade built, where the year is recorded</caption>
+      <thead><tr><th scope="col">Decade</th><th scope="col">Buildings</th></tr></thead>
+      <tbody>
+        {stats.byDecade.map(({ decade, count }) => (
+          <tr><th scope="row">{decade}s</th><td>{format.format(count)}</td></tr>
+        ))}
+      </tbody>
+    </table>
+  </section>
+</noscript>
+
+<style>
+  .static-map {
+    box-sizing: border-box;
+    max-inline-size: 60rem;
+    margin-inline: auto;
+    padding: 1.5rem;
+    font-size: 1.125rem;
+  }
+  .static-map img { display: block; inline-size: 100%; block-size: auto; }
+  .static-map a { color: var(--link); }
+  .static-map table { inline-size: 100%; border-collapse: collapse; }
+  .static-map caption { text-align: start; margin-block: 1rem; }
+  .static-map th, .static-map td {
+    padding: 0.5rem;
+    border-block-end: 1px solid var(--panel-border);
+    text-align: start;
+  }
+  .static-map td { text-align: end; font-variant-numeric: tabular-nums; }
+  /* The element exists only when the browser parses the noscript content.
+     This also works in browsers without the scripting media feature. */
+  :global(body:has(.static-map)) { block-size: auto; }
+  :global(body:has(.static-map) .info) {
+    position: static;
+    max-inline-size: none;
+    margin: 1rem;
+  }
+  :global(body:has(.static-map) #map),
+  :global(body:has(.static-map) .legend) { display: none; }
+  @media print {
+    .static-map { color: black; }
+    .static-map a { color: inherit; }
+  }
+</style>

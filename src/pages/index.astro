@@ -1,16 +1,22 @@
 ---
+import YearFilter from "../components/YearFilter.astro";
 import BaseLayout from "../layouts/BaseLayout.astro";
 // The MapLibre stylesheet comes first, so the overrides in map.css win
 // where their selectors have the same specificity.
 import "maplibre-gl/dist/maplibre-gl.css";
 import "../styles/map.css";
+import StaticMap from "../components/StaticMap.astro";
+import { DESCRIPTION } from "../lib/site";
+import { serializeStructuredData } from "../lib/structured-data";
+const jsonLd = serializeStructuredData(Astro.site!);
 ---
 
 <BaseLayout
   title="New Age of the City"
-  description="A map of Portland, Oregon's buildings colored by the year each was built, from the City of Portland's Building Footprints data."
+  description={DESCRIPTION}
   imageAlt="Map of central Portland with buildings colored by the year each was built"
 >
+  <script slot="head" is:inline type="application/ld+json" set:html={jsonLd} />
   <aside class="panel info" aria-labelledby="title">
     <details id="info">
       <summary>
@@ -32,14 +38,11 @@ import "../styles/map.css";
         > from the City of Portland Bureau of Planning and Sustainability.
       </p>
       <p>A project of <a href="https://formfollowsfunction.org/">Form Follows Function</a></p>
-      <noscript>
-        <p>
-          This map needs JavaScript to draw Portland's buildings. The Building Footprints data
-          link above describes the source data.
-        </p>
-      </noscript>
     </details>
   </aside>
+  <StaticMap />
+
+  <p id="map-keyboard-hint" class="visually-hidden">Use arrow keys to move the map. Press Enter to select a building at the center marker. Press Escape to close its details.</p>
 
   <main id="map" aria-label="Map of Portland buildings colored by the year each was built"></main>
 
@@ -61,8 +64,21 @@ import "../styles/map.css";
       <ul>
         <li><span class="swatch unknown" aria-hidden="true"></span>unknown</li>
       </ul>
+      <YearFilter />
     </details>
   </aside>
+
+  <p id="loading" class="loading" role="status">Loading buildings&hellip;</p>
+
+  <div id="load-error" class="panel load-error" role="alert" hidden>
+    <p>The buildings could not load.</p>
+    <div class="load-error-actions">
+      <button type="button" id="load-error-retry">Retry</button>
+      <button type="button" id="load-error-dismiss">Dismiss</button>
+    </div>
+  </div>
+
+  <div id="announcer" class="visually-hidden" aria-live="polite"></div>
 
   <script>
     import "../scripts/map";
