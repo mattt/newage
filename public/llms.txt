@@ -1,6 +1,6 @@
 # New Age of the City
 
-An interactive map of Portland, Oregon's building footprints,
+An interactive map of building footprints in the Portland, Oregon region,
 colored by the recorded year built.
 Buildings without a recorded year appear as unknown.
 The home page includes a static map and decade table when JavaScript is disabled.

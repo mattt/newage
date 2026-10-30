@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import stats from "../src/data/building-stats.json";
 import { loadShapes } from "./og";
 import { cardSvg, metadata, parseSelection, STOPS, tilePoint, yearColor } from "./og-model";
 const query = "?building=1S1E03BB-4800-B1&year=1978&lat=45.519148&lng=-122.680321";
@@ -11,7 +12,7 @@ describe("building card", () => {
       building: ["", "<script>", "a_b"],
       year: ["1699", "2101", "19.5", "NaN"],
       lat: ["", "Infinity", "46"],
-      lng: ["0", "-123"],
+      lng: ["0", "-124"],
     }))
       for (const value of values) {
         const bad = new URL(url);
@@ -104,4 +105,19 @@ it("highlights all fragments with the selected or fallback building ID", () => {
   }
   const anonymous = shapes.map((shape) => ({ ...shape, id: "" }));
   expect(cardSvg(parseSelection(url)!, anonymous).match(/stroke="#ffffff"/g)).toHaveLength(1);
+});
+
+
+it("accepts regional building links and rejects coordinates outside the archive", () => {
+  const regional = new URL(url);
+  regional.searchParams.set("lng", "-123.1");
+  expect(parseSelection(regional)?.lng).toBe(-123.1);
+  for (const [key, value] of [
+    ["lng", stats.bounds[0] - 0.01], ["lng", stats.bounds[2] + 0.01],
+    ["lat", stats.bounds[1] - 0.01], ["lat", stats.bounds[3] + 0.01],
+  ] as const) {
+    const outside = new URL(url);
+    outside.searchParams.set(key, String(value));
+    expect(parseSelection(outside)).toBeNull();
+  }
 });

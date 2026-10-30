@@ -18,23 +18,22 @@ then downloads GeoJSON ordered by object ID.
 | Building Footprints | https://www.portlandmaps.com/od/rest/services/COP_OpenData_Property/MapServer/48 | `BLDG_ID`, `YEAR_BUILT`, `BLDG_USE`, `BLDG_SQFT`, `NUM_STORY` |
 | Active Address Points | https://www.portlandmaps.com/od/rest/services/COP_OpenData_Property/MapServer/1272 | `ADDRESS_FULL`, address components, `IS_MAIN_ADDRESS`, `OBJECTID` |
 | Neighborhood Boundaries | https://www.portlandmaps.com/od/rest/services/COP_OpenData_Boundary/MapServer/3 | `NAME` |
-| City Boundaries | https://www.portlandmaps.com/od/rest/services/COP_OpenData_Boundary/MapServer/10 | `CITYNAME` (filtered to `Portland`) |
 
 The [Open Data portal](https://gis-pdx.opendata.arcgis.com/)
 provides the source catalog.
-All four layers are downloaded in full with `where=1=1` and no spatial filter.
+All three layers are downloaded in full with `where=1=1` and no spatial filter.
 Every page uses `orderByFields=OBJECTID` (or the layer's declared object ID field).
 Before processing, the script checks both feature count and unique object ID count
 against `returnCountOnly` queries made before and after each download.
 A mismatch stops the run before the downloaded file replaces the previous input.
-The script then selects the Portland city boundary and keeps whole footprints
-whose centroid is covered by that polygon.
-A footprint that crosses the city boundary can therefore extend slightly outside it.
+The map keeps the complete regional footprint layer, including neighboring cities.
+It does not clip buildings to the Portland city boundary.
+Address and neighborhood joins add information without removing unmatched buildings.
 
 ## Workflow overview
 
 1. Install tools with `brew bundle` and site dependencies with `npm ci`.
-2. Download and process the four datasets with `uv`.
+2. Download and process the three datasets with `uv`.
 3. Build PMTiles at maximum zoom 16 with Tippecanoe.
 4. Inspect the archive before uploading it to R2.
 
@@ -48,7 +47,7 @@ Downloaded inputs and generated tiles stay in the ignored `data/` directory.
 uv run scripts/process_buildings.py
 ```
 
-This writes `data/inputs/{city,buildings,neighborhoods,addresses}.geojson`,
+This writes `data/inputs/{buildings,neighborhoods,addresses}.geojson`,
 `data/buildings_cleaned.ndjson`, and `src/data/building-stats.json`.
 Each run downloads fresh inputs unless a local override is supplied.
 The script retries failed requests and rejects incomplete pages or duplicate object IDs.
@@ -56,11 +55,10 @@ It prints the service counts, downloaded counts, and unique object ID counts for
 ArcGIS does not provide a transaction across layers; retain the downloaded files
 when you need to reproduce the same input snapshot.
 
-Reuse all four saved inputs without network requests:
+Reuse all three saved inputs without network requests:
 
 ```bash
 uv run scripts/process_buildings.py \
-  --city data/inputs/city.geojson \
   --buildings data/inputs/buildings.geojson \
   --addresses data/inputs/addresses.geojson \
   --neighborhoods data/inputs/neighborhoods.geojson \
@@ -78,7 +76,7 @@ The validation year defaults to the current calendar year.
 Geometry repair and all spatial joins use UTM zone 10N (`EPSG:32610`), in metres.
 Empty geometries are dropped.
 Footprints and boundaries must remain polygons after repair; addresses must remain points.
-The script reports these losses, city filtering counts, final bounds in WGS84,
+The script reports these losses, final bounds in WGS84,
 and address and neighborhood coverage.
 It does not simplify footprint geometry before tiling.
 
@@ -103,9 +101,16 @@ Nearby addresses can belong to another building; this fallback is an approximati
 | `address`, `neighborhood` | Strings; omitted when unknown. |
 
 Statistics are computed from the final retained footprints, before tiling.
-The JSON keeps `source`, `total`, `unknown`, `earliestYear`, `latestYear`, and `byDecade`.
+The JSON keeps `source`, `total`, `unknown`, `earliestYear`, `latestYear`, and `byDecade`,
+and records `bounds` as `[west, south, east, north]` in WGS84.
+The map pan limits, OG card validation, and Dataset metadata use these bounds.
+Neighborhood coverage is limited to Portland neighborhood polygons;
+regional buildings outside them remain in the data without a neighborhood value.
 The year limits are `null` when no known years remain.
 Counts describe footprints, not deduplicated building IDs.
+The source `BLDG_ID` values are not unique across the region.
+The pipeline preserves these labels and all footprints; selecting a repeated label
+can highlight more than one footprint.
 
 Run the focused Python tests:
 

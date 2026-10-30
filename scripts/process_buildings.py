@@ -26,13 +26,11 @@ SOURCES = {
     "buildings": BASE + "COP_OpenData_Property/MapServer/48",
     "addresses": BASE + "COP_OpenData_Property/MapServer/1272",
     "neighborhoods": BASE + "COP_OpenData_Boundary/MapServer/3",
-    "city": BASE + "COP_OpenData_Boundary/MapServer/10",
 }
 FIELDS = {
     "buildings": "OBJECTID,BLDG_ID,YEAR_BUILT,BLDG_USE,BLDG_SQFT,NUM_STORY",
     "addresses": "OBJECTID,ADDRESS_FULL,ADDRESS_NUMBER_CHAR,STREET_NAME_FULL,STREET_PREFIX_DIRECTION,STREET_NAME,STREET_TYPE_CODE,STREET_POST_DIRECTION,UNIT,UNIT_TYPE,IS_MAIN_ADDRESS",
     "neighborhoods": "OBJECTID,NAME",
-    "city": "OBJECTID,CITYNAME",
 }
 
 
@@ -251,28 +249,10 @@ def main():
     parser.add_argument("--current-year", type=int, default=date.today().year)
     args = parser.parse_args()
     args.download_dir.mkdir(parents=True, exist_ok=True)
-    city = load(args.city or download("city", args.download_dir), "city")
-    before = len(city)
-    city = city[city.CITYNAME.str.casefold() == "portland"]
-    print(
-        f"City selection: dropped {before - len(city)} non-Portland boundaries; kept {len(city)}",
-        flush=True,
-    )
-    if city.empty:
-        raise ValueError("City input must include CITYNAME=Portland")
-    boundary = city.geometry.union_all()
     buildings = load(
         args.buildings or download("buildings", args.download_dir), "buildings"
     )
-    before = len(buildings)
-    # Keep whole footprints whose projected centroid is covered by the city.
-    buildings = buildings[buildings.geometry.centroid.covered_by(boundary)].reset_index(
-        drop=True
-    )
-    print(
-        f"City filter: dropped {before - len(buildings)}; kept {len(buildings)}",
-        flush=True,
-    )
+    # Keep the complete regional layer. Enrichment must not restrict its extent.
     neighborhoods = load(
         args.neighborhoods or download("neighborhoods", args.download_dir),
         "neighborhoods",
@@ -351,6 +331,7 @@ def main():
                 json.dumps(feature, separators=(",", ":"), allow_nan=False) + "\n"
             )
     stats = building_stats(buildings.year_built)
+    stats["bounds"] = output.total_bounds.tolist()
     args.stats_output.parent.mkdir(parents=True, exist_ok=True)
     args.stats_output.write_text(json.dumps(stats, indent=2) + "\n")
     print(

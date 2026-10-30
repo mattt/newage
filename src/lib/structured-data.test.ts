@@ -27,10 +27,11 @@ describe("home page structured data", () => {
       sameAs: DATA_SOURCE,
       isAccessibleForFree: true,
       temporalCoverage: `${stats.earliestYear}/${stats.latestYear}`,
-      spatialCoverage: { "@type": "Place", name: "Portland, Oregon", geo: { "@type": "GeoShape" } },
+      spatialCoverage: { "@type": "Place", name: "Portland, Oregon region", geo: { "@type": "GeoShape" } },
       variableMeasured: [{ "@type": "PropertyValue", name: "Year built" }],
     });
     const [south, west, north, east] = dataset.spatialCoverage.geo.box.split(" ").map(Number);
+    expect([west, south, east, north]).toEqual(stats.bounds);
     expect(south).toBeLessThan(north);
     expect(west).toBeLessThan(east);
   });

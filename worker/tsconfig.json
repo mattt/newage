@@ -4,6 +4,7 @@
     "target": "es2024",
     "module": "es2022",
     "moduleResolution": "bundler",
+    "resolveJsonModule": true,
     "lib": ["es2024"],
     "types": ["@cloudflare/workers-types"],
     "strict": true,

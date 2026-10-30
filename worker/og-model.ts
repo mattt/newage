@@ -1,4 +1,5 @@
 import { formatHex, interpolate } from "culori";
+import stats from "../src/data/building-stats.json";
 
 export const STOPS = [
   [1885, "#30fbff"],
@@ -30,10 +31,10 @@ export function parseSelection(url: URL): Selection | null {
     (year !== null && (!Number.isInteger(year) || year < 1700 || year > 2100)) ||
     !Number.isFinite(lat) ||
     !Number.isFinite(lng) ||
-    lat < 45.35 ||
-    lat > 45.72 ||
-    lng < -122.95 ||
-    lng > -122.25
+    lat < stats.bounds[1] ||
+    lat > stats.bounds[3] ||
+    lng < stats.bounds[0] ||
+    lng > stats.bounds[2]
   )
     return null;
   return { building, year, lat: Math.round(lat * 1e6) / 1e6, lng: Math.round(lng * 1e6) / 1e6 };
@@ -65,7 +66,7 @@ export function metadata(url: URL, version: string) {
   return {
     title,
     image: image.href,
-    description: `Explore this Portland building and its neighbors, colored by year built. Location: ${s.lat.toFixed(6)}, ${s.lng.toFixed(6)}.`,
+    description: `Explore this building in the Portland region and its neighbors, colored by year built. Location: ${s.lat.toFixed(6)}, ${s.lng.toFixed(6)}.`,
   };
 }
 export interface Shape {

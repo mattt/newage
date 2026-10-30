@@ -4,17 +4,22 @@
 # ///
 """Test pure building data transformations with uv run."""
 
+import json
 import math
+import sys
 
+import geopandas as gpd
 import pytest
 from process_buildings import (
     assign_bucket,
     building_stats,
     format_address,
+    main,
     normalize_number,
     normalize_year,
     validate_completeness,
 )
+from shapely.geometry import Point, box
 
 
 @pytest.mark.parametrize(
@@ -129,6 +134,75 @@ def test_incomplete_download(downloaded, unique):
         RuntimeError, match="service count=100.*downloaded features=.*unique OBJECTIDs="
     ):
         validate_completeness("buildings", 100, downloaded, unique)
+
+
+def test_regional_building_survives_enrichment(tmp_path, monkeypatch):
+    # The west footprint is outside both Portland and its neighborhood polygons.
+    footprints = [
+        box(-123.10, 45.50, -123.099, 45.501),
+        box(-122.60, 45.50, -122.599, 45.501),
+    ]
+    buildings = gpd.GeoDataFrame(
+        {
+            "OBJECTID": [1, 2],
+            "BLDG_ID": ["regional", "city"],
+            "YEAR_BUILT": [1980, 1900],
+            "BLDG_USE": ["Residential", "Residential"],
+            "BLDG_SQFT": [1000, 1200],
+            "NUM_STORY": [1, 2],
+        },
+        geometry=footprints,
+        crs=4326,
+    )
+    neighborhoods = gpd.GeoDataFrame(
+        {"OBJECTID": [1], "NAME": ["City neighborhood"]},
+        geometry=[box(-122.61, 45.49, -122.59, 45.51)],
+        crs=4326,
+    )
+    addresses = gpd.GeoDataFrame(
+        {"OBJECTID": [1], "ADDRESS_FULL": ["1 Regional Road"], "IS_MAIN_ADDRESS": [1]},
+        geometry=[Point(-123.0995, 45.5005)],
+        crs=4326,
+    )
+    argv = ["process_buildings.py", "--current-year", "2026"]
+    for name, frame in [
+        ("buildings", buildings),
+        ("addresses", addresses),
+        ("neighborhoods", neighborhoods),
+    ]:
+        path = tmp_path / f"{name}.geojson"
+        frame.to_file(path, driver="GeoJSON")
+        argv.extend([f"--{name}", str(path)])
+    output = tmp_path / "buildings.ndjson"
+    stats_path = tmp_path / "stats.json"
+    argv.extend(
+        [
+            "--download-dir",
+            str(tmp_path),
+            "--output",
+            str(output),
+            "--stats-output",
+            str(stats_path),
+        ]
+    )
+    monkeypatch.setattr(sys, "argv", argv)
+    main()
+    features = [json.loads(line) for line in output.read_text().splitlines()]
+    assert len(features) == 2
+    regional = next(
+        f["properties"] for f in features if f["properties"]["bldg_id"] == "regional"
+    )
+    assert regional["address"] == "1 Regional Road"
+    assert "neighborhood" not in regional
+    city = next(
+        f["properties"] for f in features if f["properties"]["bldg_id"] == "city"
+    )
+    assert city["neighborhood"] == "City neighborhood"
+    assert "address" not in city
+    stats = json.loads(stats_path.read_text())
+    assert stats["total"] == 2
+    assert stats["unknown"] == 0
+    assert stats["bounds"] == pytest.approx([-123.10, 45.50, -122.599, 45.501])
 
 
 if __name__ == "__main__":

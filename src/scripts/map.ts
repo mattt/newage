@@ -61,8 +61,8 @@ const map = new Map({
   zoom: 13,
   minZoom: 10,
   maxBounds: [
-    [-122.95, 45.35],
-    [-122.25, 45.72],
+    [stats.bounds[0], stats.bounds[1]],
+    [stats.bounds[2], stats.bounds[3]],
   ],
   // Keep the map position in the fragment as "#map=zoom/lat/lng",
   // which leaves room for other fragment parameters.

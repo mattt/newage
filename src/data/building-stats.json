@@ -1,85 +1,95 @@
 {
   "source": "City of Portland Building Footprints, via scripts/process_buildings.py",
-  "total": 246473,
-  "unknown": 16311,
-  "earliestYear": 1846,
+  "total": 749294,
+  "unknown": 215678,
+  "earliestYear": 1800,
   "latestYear": 2026,
   "byDecade": [
     {
-      "decade": 1840,
-      "count": 1
+      "decade": 1800,
+      "count": 11
     },
     {
-      "decade": 1850,
+      "decade": 1840,
       "count": 2
     },
     {
+      "decade": 1850,
+      "count": 14
+    },
+    {
       "decade": 1860,
-      "count": 7
+      "count": 26
     },
     {
       "decade": 1870,
-      "count": 55
+      "count": 123
     },
     {
       "decade": 1880,
-      "count": 794
+      "count": 900
     },
     {
       "decade": 1890,
-      "count": 2656
+      "count": 3102
     },
     {
       "decade": 1900,
-      "count": 16439
+      "count": 19875
     },
     {
       "decade": 1910,
-      "count": 21831
+      "count": 26475
     },
     {
       "decade": 1920,
-      "count": 44298
+      "count": 52923
     },
     {
       "decade": 1930,
-      "count": 9908
+      "count": 18603
     },
     {
       "decade": 1940,
-      "count": 27094
+      "count": 42755
     },
     {
       "decade": 1950,
-      "count": 35069
+      "count": 55924
     },
     {
       "decade": 1960,
-      "count": 17737
+      "count": 51023
     },
     {
       "decade": 1970,
-      "count": 13126
+      "count": 75179
     },
     {
       "decade": 1980,
-      "count": 8331
+      "count": 43084
     },
     {
       "decade": 1990,
-      "count": 11784
+      "count": 72644
     },
     {
       "decade": 2000,
-      "count": 13268
+      "count": 51027
     },
     {
       "decade": 2010,
-      "count": 6167
+      "count": 13018
     },
     {
       "decade": 2020,
-      "count": 1595
+      "count": 6908
     }
+  ],
+  "bounds": [
+    -123.38199454582774,
+    44.89924951727253,
+    -121.70831752689496,
+    45.78232220168177
   ]
 }
