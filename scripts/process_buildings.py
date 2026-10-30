@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # /// script
-# requires-python = ">=3.11"
+# requires-python = ">=3.11,<3.14"
 # dependencies = ["geopandas==1.1.1", "shapely==2.1.2", "pyogrio==0.11.1"]
 # ///
 """Download Portland GIS inputs and prepare building GeoJSON sequences."""

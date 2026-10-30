@@ -31,9 +31,9 @@ jobs:
           brew bundle
           npm ci
       - name: Test transformations
-        run: uv run scripts/test_process_buildings.py
+        run: uv run --python 3.12 scripts/test_process_buildings.py
       - name: Rebuild buildings and statistics
-        run: uv run scripts/process_buildings.py
+        run: uv run --python 3.12 scripts/process_buildings.py
       - name: Build and inspect PMTiles
         run: |
           bash scripts/build_tiles.sh

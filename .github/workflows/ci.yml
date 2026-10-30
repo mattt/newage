@@ -56,4 +56,4 @@ jobs:
       - name: Install uv
         run: python3 -m pip install uv==0.13.1
       - name: Test transformations and regional retention
-        run: uv run scripts/test_process_buildings.py
+        run: uv run --python 3.12 scripts/test_process_buildings.py

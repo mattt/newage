@@ -39,6 +39,9 @@ Address and neighborhood joins add information without removing unmatched buildi
 
 The Brewfile installs `uv`, `tippecanoe`, and the `pmtiles` CLI.
 The Python scripts use self-contained PEP 723 dependency metadata.
+GIS workflows select Python 3.12, which has wheels for the pinned GIS libraries.
+The scripts accept Python 3.11 through 3.13; Python 3.14 is excluded because
+`pyogrio` 0.11.1 does not provide a wheel for it.
 Downloaded inputs and generated tiles stay in the ignored `data/` directory.
 
 ## 1) Download and process buildings

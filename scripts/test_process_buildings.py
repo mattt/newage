@@ -1,5 +1,5 @@
 # /// script
-# requires-python = ">=3.11"
+# requires-python = ">=3.11,<3.14"
 # dependencies = ["pytest==9.0.2", "geopandas==1.1.1", "shapely==2.1.2", "pyogrio==0.11.1"]
 # ///
 """Test pure building data transformations with uv run."""
