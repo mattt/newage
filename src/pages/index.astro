@@ -1,6 +1,7 @@
 ---
 import YearFilter from "../components/YearFilter.astro";
 import BaseLayout from "../layouts/BaseLayout.astro";
+import "../styles/search.css";
 // The MapLibre stylesheet comes first, so the overrides in map.css win
 // where their selectors have the same specificity.
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -44,6 +45,34 @@ const jsonLd = serializeStructuredData(Astro.site!);
 
   <p id="map-keyboard-hint" class="visually-hidden">Use arrow keys to move the map. Press Enter to select a building at the center marker. Press Escape to close its details.</p>
 
+  <aside class="panel search" aria-label="Address search">
+    <form id="search-form" role="search">
+      <label class="search-label" for="search-input">Search an address</label>
+      <input
+        id="search-input"
+        type="search"
+        role="combobox"
+        placeholder="Search an address"
+        autocomplete="off"
+        spellcheck="false"
+        enterkeyhint="search"
+        maxlength="120"
+        aria-autocomplete="list"
+        aria-expanded="false"
+        aria-controls="search-results"
+      />
+      <div id="search-popup" class="search-popup" hidden>
+        <ul id="search-results" role="listbox" aria-label="Addresses"></ul>
+        <p class="search-attribution">
+          Search by <a href="https://photon.komoot.io/">Photon</a>. &copy; <a
+            href="https://www.openstreetmap.org/copyright">OpenStreetMap</a
+          > contributors
+        </p>
+      </div>
+      <p id="search-status" class="search-status" role="status"></p>
+    </form>
+  </aside>
+
   <main id="map" aria-label="Map of Portland buildings colored by the year each was built"></main>
 
   <aside class="panel legend" aria-labelledby="legend-title">
@@ -82,5 +111,6 @@ const jsonLd = serializeStructuredData(Astro.site!);
 
   <script>
     import "../scripts/map";
+    import "../scripts/search";
   </script>
 </BaseLayout>

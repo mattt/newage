@@ -1,3 +1,4 @@
+import { GEOCODE_PREFIX, handleGeocode } from "./geocode";
 import { handleTiles, TILES_PREFIX, type TilesEnv } from "./tiles";
 
 import { handleOg, rewriteHome } from "./og";
@@ -54,6 +55,10 @@ export default {
           headers: { Allow: "GET, HEAD" },
         })
       );
+    }
+
+    if (url.pathname.startsWith(GEOCODE_PREFIX)) {
+      return withNosniff(await handleGeocode(request, ctx));
     }
 
     if (url.pathname.startsWith(TILES_PREFIX)) {
