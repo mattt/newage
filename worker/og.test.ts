@@ -36,7 +36,7 @@ describe("building card", () => {
     expect(yearColor(1700)).toBe(STOPS[0][1]);
     expect(yearColor(2100)).toBe(STOPS.at(-1)![1]);
   });
-  it("builds a map card with the selected outline and fixed age", () => {
+  it("builds a map card with the selected outline", () => {
     const svg = cardSvg(
       parseSelection(url)!,
       [
@@ -52,20 +52,17 @@ describe("building card", () => {
           ],
         },
       ],
-      2026,
     );
     expect(svg).toContain('width="1200" height="630"');
     expect(svg).toContain('stroke="#ffffff"');
-    expect(svg).toContain("48 years old");
+    expect(svg).not.toContain("years old");
     expect(svg).toContain("M850.00,300.00");
-    expect(cardSvg({ ...parseSelection(url)!, year: null }, [], 2026)).toContain(
-      "Year built unknown",
-    );
+    expect(cardSvg({ ...parseSelection(url)!, year: null }, [])).toContain(">unknown<");
   });
   it("rewrites only valid home URLs and versions the image", () => {
-    expect(metadata(url, "archive-etag", 2026)?.image).toContain("v=archive-etag&asof=2026");
-    expect(metadata(new URL("https://ageofthe.city/other/" + query), "v", 2026)).toBeNull();
-    expect(metadata(new URL("https://ageofthe.city/?year=bad"), "v", 2026)).toBeNull();
+    expect(metadata(url, "archive-etag")?.image).toContain("v=archive-etag");
+    expect(metadata(new URL("https://ageofthe.city/other/" + query), "v")).toBeNull();
+    expect(metadata(new URL("https://ageofthe.city/?year=bad"), "v")).toBeNull();
   });
 });
 
@@ -90,7 +87,7 @@ it("normalizes coordinate precision before forming the image key", () => {
   const precise = new URL(url);
   precise.searchParams.set("lat", "45.51914801");
   precise.searchParams.set("lng", "-122.68032101");
-  expect(metadata(precise, "archive", 2026)).toEqual(metadata(url, "archive", 2026));
+  expect(metadata(precise, "archive")).toEqual(metadata(url, "archive"));
 });
 
 it("highlights all fragments with the selected or fallback building ID", () => {
@@ -101,10 +98,10 @@ it("highlights all fragments with the selected or fallback building ID", () => {
     { id: "other", year: 1978, rings: [ring] },
   ];
   for (const building of ["shared", "missing"]) {
-    const svg = cardSvg({ ...parseSelection(url)!, building }, shapes, 2026);
+    const svg = cardSvg({ ...parseSelection(url)!, building }, shapes);
     expect(svg.match(/stroke="#ffffff"/g)).toHaveLength(2);
     expect(svg.match(/opacity="1"/g)).toHaveLength(2);
   }
   const anonymous = shapes.map((shape) => ({ ...shape, id: "" }));
-  expect(cardSvg(parseSelection(url)!, anonymous, 2026).match(/stroke="#ffffff"/g)).toHaveLength(1);
+  expect(cardSvg(parseSelection(url)!, anonymous).match(/stroke="#ffffff"/g)).toHaveLength(1);
 });

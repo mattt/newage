@@ -88,22 +88,19 @@ export async function handleOg(
   try {
     const p = services.archive(env),
       h = await p.getHeader();
-    const epochRaw = url.searchParams.get("asof");
-    const epoch =
-      epochRaw && /^20\d{2}$/.test(epochRaw) ? Number(epochRaw) : new Date().getUTCFullYear();
-    const m = metadata(new URL(`/${url.search}`, url.origin), h.etag ?? "", epoch)!;
+    const m = metadata(new URL(`/${url.search}`, url.origin), h.etag ?? "")!;
     const key = new Request(m.image);
     const hit = await caches.default.match(key);
     if (hit) {
       const r = new Response(request.method === "HEAD" ? null : hit.body, hit);
       r.headers.set("X-OG-Cache", "HIT");
-      if (url.searchParams.get("v") !== h.etag || epochRaw !== String(epoch))
+      if (url.searchParams.get("v") !== h.etag)
         r.headers.set("Cache-Control", "public, max-age=300");
       return r;
     }
     const work = services.budget.run(key.url, async () => {
       const shapes = await services.loadShapes(p, s, Math.max(h.minZoom, Math.min(15, h.maxZoom)));
-      const png = await services.renderPng(cardSvg(s, shapes, epoch));
+      const png = await services.renderPng(cardSvg(s, shapes));
       // Keep coalescing active until the immutable cache entry is stored.
       await caches.default.put(key, new Response(png as Uint8Array<ArrayBuffer>, {
         headers: {
@@ -122,7 +119,7 @@ export async function handleOg(
     }
     ctx.waitUntil(work.then(() => undefined, () => undefined));
     const png = await work;
-    const versioned = url.searchParams.get("v") === h.etag && epochRaw === String(epoch);
+    const versioned = url.searchParams.get("v") === h.etag;
     return new Response(request.method === "HEAD" ? null : png as Uint8Array<ArrayBuffer>, {
       headers: {
         "Content-Type": "image/png",
@@ -146,7 +143,7 @@ export async function rewriteHome(
     return response;
   try {
     const h = await archive(env).getHeader();
-    const m = metadata(url, h.etag ?? "", new Date().getUTCFullYear())!;
+    const m = metadata(url, h.etag ?? "")!;
     const values: Record<string, string> = {
       "og:title": m.title,
       "twitter:title": m.title,

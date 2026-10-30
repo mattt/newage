@@ -22,9 +22,9 @@ uvx --from fonttools pyftsubset Anton-Regular.ttf \
   --unicodes=U+0020-007E,U+00B7,U+2014 --layout-features='*'
 ```
 
-The card cache key contains normalized selection parameters,
-the archive ETag, and the calendar year used for the displayed age.
-Only URLs with the current archive and calendar versions get immutable caching.
+The card cache key contains normalized selection parameters
+and the archive ETag.
+Only URLs with the current archive version get immutable caching.
 Unversioned requests use a five-minute browser cache.
 `X-OG-Cache` reports a Cache API hit or miss for local verification.
 Invalid parameters or unavailable archive data fall back to the static image.

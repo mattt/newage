@@ -54,14 +54,13 @@ export function tilePoint(lat: number, lng: number, z: number) {
     y: (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * 2 ** z,
   };
 }
-export function metadata(url: URL, version: string, epoch: number) {
+export function metadata(url: URL, version: string) {
   const s = url.pathname === "/" ? parseSelection(url) : null;
   if (!s) return null;
   const image = new URL("/og/building.png", url.origin);
   for (const [k, v] of Object.entries(s))
     image.searchParams.set(k, v === null ? "unknown" : String(v));
   image.searchParams.set("v", version);
-  image.searchParams.set("asof", String(epoch));
   const title = `${s.year === null ? "Year built unknown" : `Built in ${s.year}`} — New Age of the City`;
   return {
     title,
@@ -74,7 +73,7 @@ export interface Shape {
   year: number | null;
   rings: { x: number; y: number }[][];
 }
-export function cardSvg(s: Selection, shapes: Shape[], epoch: number): string {
+export function cardSvg(s: Selection, shapes: Shape[]): string {
   let chosen = shapes.find((f) => f.id === s.building);
   if (!chosen) {
     let best = Infinity;
@@ -104,5 +103,5 @@ export function cardSvg(s: Selection, shapes: Shape[], epoch: number): string {
         `<path d="${f.rings.map((r) => r.map((p, i) => `${i ? "L" : "M"}${p.x.toFixed(2)},${p.y.toFixed(2)}`).join("") + "Z").join("")}" fill="${yearColor(f.year)}" fill-rule="evenodd" stroke="${isSelected(f) ? "#ffffff" : "#050506"}" stroke-width="${isSelected(f) ? 3 : 0.6}" opacity="${isSelected(f) ? 1 : 0.7}"/>`,
     )
     .join("");
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630"><defs><clipPath id="map"><rect x="570" y="0" width="630" height="630"/></clipPath></defs><rect width="1200" height="630" fill="#050506"/><g clip-path="url(#map)">${paths}</g><g font-family="Anton" fill="#fff4fe"><text x="48" y="80" font-size="30">New Age of the City</text><text x="48" y="220" font-size="40">${s.year === null ? "Year built" : "Built in"}</text><text x="48" y="345" font-size="116" fill="${yearColor(s.year)}">${s.year ?? "unknown"}</text><text x="48" y="410" font-size="28">${s.year === null ? "Year built unknown" : s.year > epoch ? `As of ${epoch}` : `${epoch - s.year} years old · ${epoch}`}</text><text x="48" y="535" font-size="22">${s.lat.toFixed(6)}, ${s.lng.toFixed(6)}</text><text x="48" y="580" font-size="22">ageofthe.city · Portland, Oregon</text></g></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630"><defs><clipPath id="map"><rect x="570" y="0" width="630" height="630"/></clipPath></defs><rect width="1200" height="630" fill="#050506"/><g clip-path="url(#map)">${paths}</g><g font-family="Anton" fill="#fff4fe"><text x="48" y="80" font-size="30">New Age of the City</text><text x="48" y="220" font-size="40">${s.year === null ? "Year built" : "Built in"}</text><text x="48" y="345" font-size="116" fill="${yearColor(s.year)}">${s.year ?? "unknown"}</text><text x="48" y="535" font-size="22">${s.lat.toFixed(6)}, ${s.lng.toFixed(6)}</text><text x="48" y="580" font-size="22">ageofthe.city · Portland, Oregon</text></g></svg>`;
 }
