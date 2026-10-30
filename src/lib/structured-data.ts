@@ -27,11 +27,11 @@ export function structuredData(site: URL) {
         license: DATA_LICENSE,
         spatialCoverage: {
           "@type": "Place",
-          name: "Portland, Oregon",
+          name: "Portland, Oregon region",
           geo: {
             "@type": "GeoShape",
-            // Approximate city envelope, in south west north east order.
-            box: "45.43 -122.84 45.66 -122.47",
+            // GeoShape uses south west north east order.
+            box: [stats.bounds[1], stats.bounds[0], stats.bounds[3], stats.bounds[2]].join(" "),
           },
         },
         temporalCoverage: `${stats.earliestYear}/${stats.latestYear}`,

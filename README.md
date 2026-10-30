@@ -7,113 +7,165 @@ by [Justin Palmer](https://github.com/caged)
 using [PMTiles](https://github.com/protomaps/PMTiles) hosted on Cloudflare R2/Workers
 and rendered with MapLibre GL JS.
 
-## Data source
+## Data sources
 
-Portland's Building Footprints dataset includes a `YEAR_BUILT` field suitable for age-based styling.
+The rebuild uses these City of Portland ArcGIS Open Data layers.
+The script queries their live metadata for pagination support and page size,
+then downloads GeoJSON ordered by object ID.
 
-- Portal: https://gis-pdx.opendata.arcgis.com/datasets/building-footprints
-- Metadata: https://www.portlandmaps.com/metadata/index.cfm?action=DisplayLayer&LayerID=52413
-- Coordinate system: Oregon State Plane North (NAD 1983);
-  must be reprojected to WGS84 (`EPSG:4326`)
+| Dataset | Exact service URL | Fields used |
+| --- | --- | --- |
+| Building Footprints | https://www.portlandmaps.com/od/rest/services/COP_OpenData_Property/MapServer/48 | `BLDG_ID`, `YEAR_BUILT`, `BLDG_USE`, `BLDG_SQFT`, `NUM_STORY` |
+| Active Address Points | https://www.portlandmaps.com/od/rest/services/COP_OpenData_Property/MapServer/1272 | `ADDRESS_FULL`, address components, `IS_MAIN_ADDRESS`, `OBJECTID` |
+| Neighborhood Boundaries | https://www.portlandmaps.com/od/rest/services/COP_OpenData_Boundary/MapServer/3 | `NAME` |
 
-Key attributes:
-
-| Field        | Type    | Description                  |
-| ------------ | ------- | ---------------------------- |
-| `YEAR_BUILT` | Integer | Construction year (nullable) |
-| `BLDG_ID`    | String  | Unique building identifier   |
-| `BLDG_USE`   | String  | Use category                 |
-| `BLDG_SQFT`  | Integer | Square footage               |
-| `NUM_STORY`  | Integer | Number of stories            |
-
-> [!NOTE]
-> `YEAR_BUILT` is missing for many features.
-> This workflow keeps missing years and labels them as `unknown`.
-> Pre-1996 data in Central City came from photogrammetry;
-> post-2007 updates come from permits.
+The [Open Data portal](https://gis-pdx.opendata.arcgis.com/)
+provides the source catalog.
+All three layers are downloaded in full with `where=1=1` and no spatial filter.
+Every page uses `orderByFields=OBJECTID` (or the layer's declared object ID field).
+Before processing, the script checks both feature count and unique object ID count
+against `returnCountOnly` queries made before and after each download.
+A mismatch stops the run before the downloaded file replaces the previous input.
+The map keeps the complete regional footprint layer, including neighboring cities.
+It does not clip buildings to the Portland city boundary.
+Address and neighborhood joins add information without removing unmatched buildings.
 
 ## Workflow overview
 
-1. Download the building footprints (Shapefile recommended).
-2. Run the preprocessing script to reproject, clean years, and generate NDJSON.
-3. Build PMTiles with Tippecanoe.
-4. Upload PMTiles to R2 and deploy the Cloudflare Worker,
-   which serves the page and the tiles.
+1. Install tools with `brew bundle` and site dependencies with `npm ci`.
+2. Download and process the three datasets with `uv`.
+3. Build PMTiles at maximum zoom 16 with Tippecanoe.
+4. Inspect the archive before uploading it to R2.
 
-## 0) Install dependencies
+The Brewfile installs `uv`, `tippecanoe`, and the `pmtiles` CLI.
+The Python scripts use self-contained PEP 723 dependency metadata.
+GIS workflows select Python 3.12, which has wheels for the pinned GIS libraries.
+The scripts accept Python 3.11 through 3.13; Python 3.14 is excluded because
+`pyogrio` 0.11.1 does not provide a wheel for it.
+Downloaded inputs and generated tiles stay in the ignored `data/` directory.
 
-Install the required tools via Homebrew:
+## 1) Download and process buildings
 
 ```bash
-brew bundle
+uv run scripts/process_buildings.py
 ```
 
-This installs:
+This writes `data/inputs/{buildings,neighborhoods,addresses}.geojson`,
+`data/buildings_cleaned.ndjson`, and `src/data/building-stats.json`.
+Each run downloads fresh inputs unless a local override is supplied.
+The script retries failed requests and rejects incomplete pages or duplicate object IDs.
+It prints the service counts, downloaded counts, and unique object ID counts for each layer.
+ArcGIS does not provide a transaction across layers; retain the downloaded files
+when you need to reproduce the same input snapshot.
 
-- `uv` for Python dependency management
-- `tippecanoe` for generating PMTiles
-- `pmtiles` CLI for inspecting tilesets
-
-## 1) Python preprocessing
-
-Run the script with `uv`:
+Reuse all three saved inputs without network requests:
 
 ```bash
 uv run scripts/process_buildings.py \
-  --input /path/to/Building_Footprints.shp \
-  --output data/buildings_cleaned.ndjson
-```
-
-> [!NOTE]
-> The script reprojects to WGS84,
-> normalizes `YEAR_BUILT`,
-> and creates `age_bucket`.
-> Missing or invalid years become `-1` and map to `unknown`.
-> You can override the current year used for validation:
-
-```bash
-uv run scripts/process_buildings.py \
-  --input /path/to/Building_Footprints.shp \
+  --buildings data/inputs/buildings.geojson \
+  --addresses data/inputs/addresses.geojson \
+  --neighborhoods data/inputs/neighborhoods.geojson \
+  --current-year 2026 \
   --output data/buildings_cleaned.ndjson \
-  --current-year 2026
+  --stats-output src/data/building-stats.json
 ```
 
-## 2) Build PMTiles with Tippecanoe
+Each override also accepts another GeoPandas-readable dataset with the same fields
+and a declared CRS.
+`--input` is an alias for `--buildings`.
+`--download-dir` changes the download directory.
+The validation year defaults to the current calendar year.
 
-Install Tippecanoe (macOS):
+Geometry repair and all spatial joins use UTM zone 10N (`EPSG:32610`), in metres.
+Empty geometries are dropped.
+Footprints and boundaries must remain polygons after repair; addresses must remain points.
+The script reports these losses, final bounds in WGS84,
+and address and neighborhood coverage.
+It does not simplify footprint geometry before tiling.
+
+The neighborhood is the polygon that contains the footprint centroid.
+Where neighborhood polygons overlap, the first name in alphabetical order wins.
+The address comes from a point covered by the footprint, including its boundary.
+If none is available, the nearest point within 30 metres of the footprint is used.
+For multiple contained points or equal-distance matches, main addresses take
+precedence, followed by the lowest object ID.
+Points without a usable address are excluded before the joins.
+`ADDRESS_FULL` supplies a single-line street address, including a unit when present.
+If it is empty, the script combines the number, street name, and unit fields.
+Nearby addresses can belong to another building; this fallback is an approximation.
+
+| Tile property | Convention |
+| --- | --- |
+| `year_built` | Integer from 1700 through the validation year; otherwise `-1`. Fractional years are invalid. |
+| `age_bucket` | Existing age bands from `pre-1900` through `2010-present`; `unknown` for year `-1`. |
+| `bldg_id` | Source building ID as a string; empty string if absent. |
+| `bldg_use` | Source use as a string; empty string if absent. |
+| `bldg_sqft`, `num_story` | Positive finite numbers; missing, zero, negative, and invalid values become `-1`. Fractions are retained. |
+| `address`, `neighborhood` | Strings; omitted when unknown. |
+
+Statistics are computed from the final retained footprints, before tiling.
+The JSON keeps `source`, `total`, `unknown`, `earliestYear`, `latestYear`, and `byDecade`,
+and records `bounds` as `[west, south, east, north]` in WGS84.
+The map pan limits, OG card validation, and Dataset metadata use these bounds.
+Neighborhood coverage is limited to Portland neighborhood polygons;
+regional buildings outside them remain in the data without a neighborhood value.
+The year limits are `null` when no known years remain.
+Counts describe footprints, not deduplicated building IDs.
+The source `BLDG_ID` values are not unique across the region.
+The pipeline preserves these labels and all footprints; selecting a repeated label
+can highlight more than one footprint.
+
+Run the focused Python tests:
 
 ```bash
-brew install tippecanoe
+uv run scripts/test_process_buildings.py
 ```
 
-Generate PMTiles:
+## 2) Build and verify PMTiles
+
+```bash
+bash scripts/build_tiles.sh
+pmtiles show data/portland_buildings.pmtiles
+pmtiles verify data/portland_buildings.pmtiles
+```
+
+The build script runs this command:
 
 ```bash
 tippecanoe \
   -o data/portland_buildings.pmtiles \
-  -l buildings \
-  -n "Portland Building Ages" \
-  --projection=EPSG:4326 \
-  -z18 \
+  -l buildings -n "Portland Building Ages" \
+  --projection=EPSG:4326 -Z10 -z16 \
   --drop-densest-as-needed \
-  --extend-zooms-if-still-dropping \
-  --coalesce-densest-as-needed \
   -y year_built -y age_bucket -y bldg_id \
-  -P \
-  -f \
-  data/buildings_cleaned.ndjson
+  -y bldg_use -y bldg_sqft -y num_story -y address -y neighborhood \
+  -P -f data/buildings_cleaned.ndjson
 ```
 
-> [!NOTE]
-> If tiles “stop loading” when you zoom in, it usually means your tileset’s max zoom is too low.
-> Increase the `-z` value above (for example, `-z18`).
-> The Worker's TileJSON reads the max zoom from the tileset, so the map needs no change.
+`-Z10` starts at city-scale zoom, omitting coarse zooms where footprints are too small to read.
+`-z16` fixes the maximum zoom at 16; MapLibre can overzoom these tiles.
+`--drop-densest-as-needed` limits dense tile sizes by dropping features as needed.
+The source statistics include all retained footprints, even if tiling drops features.
+The command does not coalesce buildings, which could combine distinct addresses.
+Each `-y` flag retains a required property.
+`-P` reads newline-delimited features in parallel, and `-f` replaces a previous archive.
+The layer name remains `buildings`, as the map expects.
 
-Sanity check:
+The [refresh workflow](.github/workflows/refresh-buildings.yml) runs manually
+with `workflow_dispatch` and on the first day of each month at 10:17 UTC.
+GitHub runs scheduled workflows from the default branch once the workflow is merged there.
+It uses a macOS runner and `brew bundle`, tests the transformations,
+rebuilds the data and statistics, and builds and verifies the archive.
+The workflow stores the PMTiles archive, regenerated statistics JSON,
+`pmtiles show` output, and SHA-256 hashes as an artifact for 30 days.
+It uses no Cloudflare credentials and never uploads or deploys.
 
-```bash
-pmtiles show data/portland_buildings.pmtiles
-```
+Download the artifact from the completed workflow run.
+Inspect the archive metadata and verify its hashes before publication.
+Open a pull request that updates `src/data/building-stats.json` from the artifact.
+Uploading the archive to R2 is a separate approved operation;
+coordinate it with deployment of the site containing the matching statistics.
+Keep the previous archive available for rollback.
 
 ## 3) Run the site locally
 

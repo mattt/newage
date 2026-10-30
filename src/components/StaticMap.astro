@@ -5,11 +5,11 @@ const format = new Intl.NumberFormat("en-US");
 
 <noscript>
   <section class="static-map" aria-labelledby="static-map-title">
-    <h2 id="static-map-title">Portland's buildings by year built</h2>
+    <h2 id="static-map-title">Buildings in the Portland region by year built</h2>
     <img src="/share.png" width="1200" height="630"
       alt="Map of central Portland with building footprints colored from cyan for older buildings through purple and pink to white for newer buildings" />
     <p>
-      This map colors Portland's buildings by the year each was built.
+      This map colors buildings in the Portland region by the year each was built.
       The dataset contains {format.format(stats.total)} buildings;{" "}
       {format.format(stats.unknown)} have no recorded year built.
       The interactive map needs JavaScript.
