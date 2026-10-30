@@ -236,7 +236,7 @@ function select(
   announce(`Selected ${address ? `${address}, ` : "building, "}${year}.`);
 
   document.dispatchEvent(
-    new CustomEvent("newage:selected", {
+    new CustomEvent("ageofthecity:selected", {
       detail: {
         bldgId: next.bldgId,
         yearBuilt: next.yearBuilt,
@@ -382,7 +382,7 @@ async function shareSelection(building: Selection) {
   const url = shareUrl(window.location.href, building, window.location.hash);
   try {
     if (typeof navigator.share === "function") {
-      await navigator.share({ title: `${describe(building)} – New Age of the City`, url });
+      await navigator.share({ title: `${describe(building)} – Age of the City`, url });
       announce("Link shared.");
     } else {
       await navigator.clipboard.writeText(url);
@@ -412,7 +412,7 @@ map.on("click", () => {
 
 // Other scripts on the page can ask the map to fly to a point,
 // such as a geocoded address, and select the building there.
-document.addEventListener("newage:flyto", (event) => {
+document.addEventListener("ageofthecity:flyto", (event) => {
   const detail = (event as CustomEvent<{ lat: number; lng: number; zoom?: number }>).detail;
   const lat = Number(detail?.lat);
   const lng = Number(detail?.lng);
