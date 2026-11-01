@@ -277,6 +277,20 @@ newer buildings sound brighter,
 and a building's position across the frame sets its pan.
 Busy years play louder, up to 45 notes a second.
 The mix is normalized to -16 LUFS integrated, with a limiter at about -2 dBFS.
+Beside each MP4, the renderer writes the soundtrack as a 24-bit WAV,
+a type 1 MIDI file with a marker and a track for each place,
+and the notes as JSON and CSV, with each note's time, place, year, pitch, velocity, and pan.
+
+`--instrument harp` plays the same notes on a recorded harp
+from the [Versilian Community Sample Library](https://github.com/sgossner/VSCO-2-CE)
+(VSCO 2 CE), whose license is CC0 1.0;
+its readme asks for credit to Versilian Studios.
+`bash scripts/video/fetch_samples.sh` downloads the harp to `data/video/samples/harp`,
+and `--reuse-frames` keeps earlier frames so that only the sound changes:
+
+```bash
+npm run video:render -- --size 1920x1080 --reuse-frames --instrument harp
+```
 
 ## Costs
 

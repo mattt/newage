@@ -5,15 +5,27 @@
 // Usage: node scripts/video/render.ts [options]
 // Run with --help for the options.
 import { spawn } from "node:child_process";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
 import { chromium, type Browser, type Page } from "playwright-core";
 import sharp from "sharp";
-import { render as renderAudio, notes, SAMPLE_RATE, writeWav, type NoteEvent } from "./audio.ts";
+import {
+  render as renderAudio,
+  notes,
+  pluck,
+  SAMPLE_RATE,
+  velocity,
+  writeWav,
+  type Note,
+  type NoteEvent,
+  type Voice,
+} from "./audio.ts";
 import { loadBuildings } from "./buildings.ts";
 import { projector } from "./frame.ts";
+import { writeMidi, type Section } from "./midi.ts";
 import { DEFAULT_PLACES, loadPlaces, parseSize, startYear, type OutputSize, type Place } from "./places.ts";
+import { loadSampler } from "./sampler.ts";
 import { startServer } from "./server.ts";
 
 const HELP = `Usage: node scripts/video/render.ts [options]
@@ -29,6 +41,10 @@ const HELP = `Usage: node scripts/video/render.ts [options]
   --no-labels             leave out the place name and year
   --no-unknown            leave out buildings of unknown year
   --no-audio              leave out the soundtrack
+  --instrument NAME       pluck, the synthesized default, or a sampled instrument
+                          such as harp (see scripts/video/fetch_samples.sh)
+  --samples DIR           samples for the instrument (default data/video/samples/NAME)
+  --reuse-frames          keep frames rendered by an earlier run, to change only the sound
   --stills                render each place at its last year, and a contact sheet
   --buildings-tiles FILE  default data/regional-buildings.pmtiles
   --orientation-tiles FILE  default data/orientation.pmtiles
@@ -47,6 +63,9 @@ const { values: options } = parseArgs({
     "no-labels": { type: "boolean", default: false },
     "no-unknown": { type: "boolean", default: false },
     "no-audio": { type: "boolean", default: false },
+    instrument: { type: "string", default: "pluck" },
+    samples: { type: "string" },
+    "reuse-frames": { type: "boolean", default: false },
     stills: { type: "boolean", default: false },
     "buildings-tiles": { type: "string", default: "data/regional-buildings.pmtiles" },
     "orientation-tiles": { type: "string", default: "data/orientation.pmtiles" },
@@ -66,6 +85,11 @@ const FADE = Number(options.fade);
 const LOUDNESS = -16;
 /** The limiter ceiling: about -2 dBFS, which leaves room for AAC overshoot. */
 const LIMIT = 0.79;
+const INSTRUMENT = options.instrument;
+/** Outputs with another instrument than the default get its name, so they do not replace each other. */
+const SUFFIX = INSTRUMENT === "pluck" ? "" : `-${INSTRUMENT}`;
+const voice: Voice =
+  INSTRUMENT === "pluck" ? pluck : await loadSampler(options.samples ?? join("data/video/samples", INSTRUMENT));
 
 function positive(name: "fps" | "years-per-second"): number {
   const value = Number(options[name]);
@@ -246,6 +270,7 @@ function planClip(place: Place, size: OutputSize): Clip {
       year,
       sqft: buildings.sqft[i],
       seed: i,
+      place: place.id,
     });
   }
   return { place, start, end, years: frameYears, events, seconds: frameYears.length / FPS };
@@ -259,8 +284,8 @@ async function renderVideo(page: Page, size: OutputSize, directory: string) {
   for (const clip of clips) {
     const began = performance.now();
     const video = join(work, `${clip.place.id}.mkv`);
-    await renderFrames(page, clip, video);
-    const output = join(directory, `${clip.place.id}.mp4`);
+    if (!(options["reuse-frames"] && (await exists(video)))) await renderFrames(page, clip, video);
+    const output = join(directory, `${clip.place.id}${SUFFIX}.mp4`);
     await assemble([clip], [video], output, work);
     const seconds = (performance.now() - began) / 1000;
     timings.push(`${clip.place.id}: ${clip.seconds.toFixed(1)} s of video, ${clip.start}–${clip.end}, ` +
@@ -268,7 +293,7 @@ async function renderVideo(page: Page, size: OutputSize, directory: string) {
     console.log(output);
   }
   if (clips.length > 1) {
-    const output = join(directory, "sequence.mp4");
+    const output = join(directory, `sequence${SUFFIX}.mp4`);
     await assemble(clips, clips.map((clip) => join(work, `${clip.place.id}.mkv`)), output, work);
     console.log(output);
   }
@@ -331,8 +356,11 @@ async function assemble(clips: Clip[], videos: string[], output: string, work: s
     );
     const raw = join(work, `${name}-raw.wav`);
     const normalized = join(work, `${name}.wav`);
-    await writeWav(raw, renderAudio(notes(events), total));
+    const played = notes(events);
+    await writeWav(raw, renderAudio(played, total, voice));
     await normalize(raw, normalized);
+    const sections = clips.map((clip, i) => ({ id: clip.place.id, name: clip.place.name, start: offsets[i] }));
+    await exportSound(join(dirname(output), name), normalized, played, sections, total);
     inputs.push("-i", normalized);
     audioArgs.push("-map", `${clips.length}:a`, "-c:a", "aac", "-b:a", "192k", "-ar", String(SAMPLE_RATE));
   }
@@ -344,6 +372,44 @@ async function assemble(clips: Clip[], videos: string[], output: string, work: s
     "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709",
     "-movflags", "+faststart", "-t", total.toFixed(3), output,
   ]);
+}
+
+/**
+ * Writes the soundtrack and its notes beside the video, for other instruments
+ * and tools: a 24-bit WAV, a MIDI file, and the notes as JSON and CSV.
+ */
+async function exportSound(base: string, wav: string, played: Note[], sections: Section[], seconds: number) {
+  await run("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y", "-i", wav, "-c:a", "pcm_s24le", `${base}.wav`]);
+  await writeMidi(`${base}.mid`, played, sections, seconds);
+  const names = new Map(sections.map((section) => [section.id, section.name]));
+  const rows = played.map((note) => ({
+    time: round(note.time, 4),
+    frame_time: round(note.frameTime, 4),
+    place: names.get(note.place) ?? note.place,
+    year: note.year,
+    midi: note.midi,
+    velocity: velocity(note.amplitude),
+    pan: round(note.pan * 2 - 1, 3),
+    sqft: note.sqft,
+    buildings: note.buildings,
+  }));
+  await writeFile(`${base}-notes.json`, JSON.stringify({ sections, notes: rows }, null, 1));
+  const header = Object.keys(rows[0] ?? { time: 0 });
+  const csv = rows.map((row) => Object.values(row).map((value) => (typeof value === "string" ? JSON.stringify(value) : value)).join(","));
+  await writeFile(`${base}-notes.csv`, [header.join(","), ...csv].join("\n") + "\n");
+}
+
+function round(value: number, digits: number): number {
+  return Number(value.toFixed(digits));
+}
+
+async function exists(file: string): Promise<boolean> {
+  try {
+    await access(file);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**

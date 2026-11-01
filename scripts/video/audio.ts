@@ -1,5 +1,6 @@
-// Synthesizes the soundtrack from building events: each building that appears
-// in the frame plucks a string. Nothing here uses samples or recorded audio.
+// Makes the soundtrack from building events: each building that appears in the
+// frame plucks a string. The default voice is synthesized; sampler.ts supplies
+// recorded instruments that play the same notes.
 //
 // - Time: a building sounds on the frame where its year arrives. Buildings of
 //   the same year spread across that year's share of the clip, like a strum.
@@ -25,6 +26,8 @@ export interface NoteEvent {
   sqft: number;
   /** A stable number for the building, which picks its variations. */
   seed: number;
+  /** The place's ID, for exports. */
+  place: string;
 }
 
 /** The most notes per second of playback, whatever the speed. */
@@ -36,6 +39,10 @@ const SCALE = [0, 2, 4, 7, 9];
 const ROOT = 50;
 const DEGREES = 14;
 const NOTE_SECONDS = 2.4;
+/** The amplitude of the loudest possible note, for MIDI velocity. */
+const MAX_AMPLITUDE = 0.5;
+/** MIDI velocity 1 is this many decibels below velocity 127. */
+const VELOCITY_RANGE_DB = 40;
 
 /** Groups events that sound together: same time, same strum. */
 function groups(events: NoteEvent[]): NoteEvent[][] {
@@ -50,13 +57,23 @@ function groups(events: NoteEvent[]): NoteEvent[][] {
 }
 
 export interface Note {
+  /** Seconds from the start of the output, when the note sounds. */
   time: number;
+  /** The frame time at which the building appears, before the strum spreads it. */
+  frameTime: number;
+  midi: number;
   frequency: number;
   amplitude: number;
   /** From 0 (dark) to 1 (bright). */
   brightness: number;
+  /** From 0 (left) to 1 (right). */
   pan: number;
   seed: number;
+  place: string;
+  year: number;
+  sqft: number;
+  /** How many buildings appeared with this note, of which it is one voice. */
+  buildings: number;
 }
 
 /** Chooses the notes that the events play. */
@@ -69,19 +86,26 @@ export function notes(events: NoteEvent[]): Note[] {
     const level = Math.sqrt(Math.min(1, Math.log1p(n) / Math.log1p(FULL)));
     // A stable choice of voices: the order of their seeds, not of the data file.
     const chosen = [...group].sort((a, b) => hash(a.seed) - hash(b.seed)).slice(0, voices);
-    const amplitude = (0.5 * level) / Math.sqrt(chosen.length);
+    const amplitude = (MAX_AMPLITUDE * level) / Math.sqrt(chosen.length);
     // A crowded strum is a little darker, so that it blends.
     const crowd = n > voices ? 0.8 : 1;
     for (const event of chosen) {
       const h = hash(event.seed);
+      const midi = pitch(event.sqft, h);
       result.push({
         // Leave a gap before the next year's notes.
         time: event.time + 0.9 * yearSeconds * fraction(h),
-        frequency: midiFrequency(pitch(event.sqft, h)),
+        frameTime: event.time,
+        midi,
+        frequency: midiFrequency(midi),
         amplitude,
         brightness: crowd * yearBrightness(event.year),
         pan: 0.1 + 0.8 * Math.min(1, Math.max(0, event.x)),
         seed: h,
+        place: event.place,
+        year: event.year,
+        sqft: event.sqft,
+        buildings: n,
       });
     }
   }
@@ -102,16 +126,25 @@ function yearBrightness(year: number): number {
   return Math.min(1, Math.max(0, (year - 1880) / 146));
 }
 
-function midiFrequency(midi: number): number {
+/** The MIDI velocity for a note's amplitude, on a decibel scale. */
+export function velocity(amplitude: number): number {
+  const db = 20 * Math.log10(amplitude / MAX_AMPLITUDE);
+  return Math.min(127, Math.max(1, Math.round(127 * (1 + db / VELOCITY_RANGE_DB))));
+}
+
+export function midiFrequency(midi: number): number {
   return 440 * 2 ** ((midi - 69) / 12);
 }
 
+/** Adds one note to the stereo output. */
+export type Voice = (note: Note, left: Float32Array, right: Float32Array) => void;
+
 /** Renders notes to stereo samples, with a little room reverb. */
-export function render(noteList: Note[], seconds: number): [Float32Array, Float32Array] {
+export function render(noteList: Note[], seconds: number, voice: Voice = pluck): [Float32Array, Float32Array] {
   const length = Math.ceil(seconds * SAMPLE_RATE);
   const left = new Float32Array(length);
   const right = new Float32Array(length);
-  for (const note of noteList) pluck(note, left, right);
+  for (const note of noteList) voice(note, left, right);
   const [wetLeft, wetRight] = reverb(left, right);
   for (let i = 0; i < length; i++) {
     left[i] = 0.8 * left[i] + 0.35 * wetLeft[i];
@@ -124,7 +157,7 @@ export function render(noteList: Note[], seconds: number): [Float32Array, Float3
  * A Karplus–Strong plucked string: a burst of filtered noise in a delay line
  * one period long, which a gentle low-pass loop filter decays.
  */
-function pluck(note: Note, left: Float32Array, right: Float32Array) {
+export function pluck(note: Note, left: Float32Array, right: Float32Array) {
   const start = Math.round(note.time * SAMPLE_RATE);
   if (start >= left.length) return;
   const period = SAMPLE_RATE / note.frequency;
@@ -150,8 +183,7 @@ function pluck(note: Note, left: Float32Array, right: Float32Array) {
   // by 60 dB at D3 to about 1.2 seconds at the top of the scale.
   const ring = 1.2 + 1.2 * Math.min(1, Math.max(0, (600 - note.frequency) / 450));
   const decay = 10 ** (-3 / (ring * note.frequency));
-  const gainLeft = note.amplitude * Math.cos((note.pan * Math.PI) / 2);
-  const gainRight = note.amplitude * Math.sin((note.pan * Math.PI) / 2);
+  const [gainLeft, gainRight] = panGains(note);
   const total = Math.min(left.length - start, Math.round(NOTE_SECONDS * SAMPLE_RATE));
   const fadeIn = Math.round(0.004 * SAMPLE_RATE);
   const fadeOut = Math.round(0.3 * SAMPLE_RATE);
@@ -255,6 +287,14 @@ export function hash(value: number): number {
   x = Math.imul(x, 0x846ca68b);
   x ^= x >>> 16;
   return x >>> 0;
+}
+
+/** Equal-power gains for a note's level and pan. */
+export function panGains(note: Note): [left: number, right: number] {
+  return [
+    note.amplitude * Math.cos((note.pan * Math.PI) / 2),
+    note.amplitude * Math.sin((note.pan * Math.PI) / 2),
+  ];
 }
 
 function fraction(h: number): number {
