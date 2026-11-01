@@ -107,24 +107,28 @@ pmtiles show data/portland_buildings.pmtiles
 pmtiles verify data/portland_buildings.pmtiles
 ```
 
-The build script runs this command:
+Zooms 10 through 12 keep only `year_built`, with 14-bit coordinates.
+Zooms 13 through 16 keep all popup properties, with 12-bit coordinates.
+Both ranges disable density dropping and tiny-polygon reduction.
+A fixed 10 MB compressed tile limit fails the build instead of reducing precision.
+`tile-join` combines the ranges into one `buildings` layer.
+The Worker preserves gzip compression through its tile cache.
+
+Below zoom 13, clicking a building or pressing Enter on one zooms in to inspect it.
+Selection, hover, popups, and the highlight start at zoom 13.
+Building share links still open at zoom 17.
+
+The script accepts input and output paths as optional arguments.
+To inspect tile sizes and run the tiling tests:
 
 ```bash
-tippecanoe \
-  -o data/portland_buildings.pmtiles \
-  -l buildings -n "Portland Building Ages" \
-  --projection=EPSG:4326 -Z10 -z16 \
-  --drop-densest-as-needed \
-  -y year_built -y age_bucket -y bldg_id \
-  -y bldg_use -y bldg_sqft -y num_story -y address -y neighborhood \
-  -P -f data/buildings_cleaned.ndjson
+node scripts/inspect_tiles.ts data/portland_buildings.pmtiles
+python3 scripts/test_build_tiles.py
 ```
 
-Tiles start at city-scale zoom 10; MapLibre overzooms above 16.
-Dense tiles can drop features; statistics still include all retained footprints.
-Buildings are not coalesced, preserving distinct addresses.
-The map requires the `buildings` layer and all listed properties.
-`-P` reads features in parallel; `-f` replaces the archive.
+See the [low-zoom measurements](docs/low-zoom-detail.md) for archive sizes,
+feature-record counts, and the throttled mobile comparison.
+The lean candidate exceeded the 20-second mobile load budget and is not published.
 
 The [refresh workflow](.github/workflows/refresh-buildings.yml) runs manually
 with `workflow_dispatch` and from the default branch monthly on day 1 at 10:17 UTC.
@@ -221,7 +225,9 @@ npx wrangler r2 object put ageofthe-city/portland_buildings.pmtiles \
 npm run deploy
 ```
 
-To publish a new tileset, upload it again with the same command.
+For the lean overview, deploy the zoom-gated selection code before uploading tiles.
+Older code highlights low-zoom features that have no building ID.
+Save the current archive for rollback before replacing it.
 The TileJSON is cached for five minutes,
 then the page requests tiles with the new version.
 
@@ -235,7 +241,8 @@ curl -I https://www.ageofthe.city/
 
 ## Costs
 
-Archives total about 125 MB: buildings 116 MB, orientation 8.7 MB.
+The production buildings archive is about 116 MB; the lean candidate is 147 MB.
+Orientation adds 8.7 MB.
 [R2 Standard](https://developers.cloudflare.com/r2/pricing/) includes free monthly allowances
 of 10 GB-month, 1 million Class A operations, and 10 million Class B operations.
 Overages cost $0.015/GB-month, $4.50/million A, and $0.36/million B.

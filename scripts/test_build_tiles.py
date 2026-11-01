@@ -59,9 +59,14 @@ class BuildTilesTests(unittest.TestCase):
                     layers = json.loads(result.stdout)["features"]
                     self.assertEqual(len(layers), 1)
                     self.assertEqual(layers[0]["properties"]["layer"], "buildings")
-                    actual = {feature["properties"]["bldg_id"]: feature["properties"]
-                              for feature in layers[0]["features"]}
-                    self.assertEqual(actual, expected)
+                    if zoom < 13:
+                        self.assertCountEqual(
+                            [feature["properties"] for feature in layers[0]["features"]],
+                            [{"year_built": year} for year in (1890, 2020, -1)])
+                    else:
+                        actual = {feature["properties"]["bldg_id"]: feature["properties"]
+                                  for feature in layers[0]["features"]}
+                        self.assertEqual(actual, expected)
                     self.assertEqual(len(layers[0]["features"]), 3)
 
     def test_does_not_replace_an_archive_symlink(self):

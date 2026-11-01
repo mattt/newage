@@ -18,6 +18,7 @@ import {
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
 import stats from "../data/building-stats.json";
 import { textProperty, yearBuilt } from "../lib/building";
+import { BUILDING_ID as BLDG_ID, SELECTION_MIN_ZOOM, selectionFilter } from "../lib/building-selection";
 import { centroid, type FootprintGeometry } from "../lib/centroid";
 import { ORIENTATION_SOURCE, ORIENTATION_TILEJSON, orientationLayers } from "../lib/orientation";
 import { BACKGROUND, UNKNOWN, YEAR_STOPS } from "../lib/palette";
@@ -47,7 +48,6 @@ const fillColor = [
 const FILL = "buildings-fill";
 const OUTLINE = "buildings-outline";
 const HIGHLIGHT = "buildings-highlight";
-const BLDG_ID: ExpressionSpecification = ["to-string", ["get", "bldg_id"]];
 
 /** A building selected from a share link or a flyto event shows at this zoom or closer. */
 const BUILDING_ZOOM = 17;
@@ -115,7 +115,8 @@ const map = new Map({
         type: "line",
         source: "buildings",
         "source-layer": "buildings",
-        filter: ["==", BLDG_ID, ""],
+        minzoom: SELECTION_MIN_ZOOM,
+        filter: selectionFilter(),
         paint: {
           "line-color": "#ffffff",
           "line-width": ["interpolate", ["linear"], ["zoom"], 12, 1.5, 18, 3],
@@ -154,7 +155,7 @@ function applyFilters() {
   if (!styleLoaded) return;
   map.setFilter(FILL, rangeFilter);
   map.setFilter(OUTLINE, rangeFilter);
-  map.setFilter(HIGHLIGHT, allFilters(rangeFilter, ["==", BLDG_ID, selection?.bldgId ?? ""]));
+  map.setFilter(HIGHLIGHT, allFilters(rangeFilter, selectionFilter(selection?.bldgId)));
 }
 
 setupYearFilter(bounds, (range: YearRange) => {
@@ -192,6 +193,14 @@ function select(
   fallback: { lng: number; lat: number },
   options: { focus: boolean; position?: { lng: number; lat: number } },
 ) {
+  // Overview tiles have no IDs or popup data. Let the user inspect this location
+  // at a detail zoom; do not select the temporary parent tiles while it loads.
+  if (map.getZoom() < SELECTION_MIN_ZOOM || !Object.hasOwn(feature.properties, "bldg_id")) {
+    closePopup();
+    map.easeTo({ center: fallback, zoom: Math.max(14, map.getZoom()) });
+    announce("Zooming in. Select a building to see its details.");
+    return;
+  }
   const geometry = options.position ? null : footprint(feature);
   const [lng, lat] = options.position
     ? [options.position.lng, options.position.lat]
@@ -370,7 +379,12 @@ map.on("click", (event) => {
 });
 
 map.on("mousemove", FILL, () => {
-  map.getCanvas().style.cursor = "pointer";
+  map.getCanvas().style.cursor = map.getZoom() >= SELECTION_MIN_ZOOM ? "pointer" : "";
+});
+
+map.on("zoom", () => {
+  map.getCanvas().style.cursor = "";
+  if (map.getZoom() < SELECTION_MIN_ZOOM) closePopup();
 });
 
 map.on("mouseleave", FILL, () => {

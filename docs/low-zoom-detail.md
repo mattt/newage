@@ -1,11 +1,141 @@
-# Building detail at low zoom
+# Low-zoom building detail
+
+## Lean overview: shipping stopped at the mobile gate
+
+The current candidate follows the November 1 shipping brief.
+Zooms 10 through 12 contain only `year_built` at 14-bit coordinate precision.
+Zooms 13 through 16 keep all eight properties at 12-bit precision.
+Both ranges disable density dropping and tiny-polygon reduction.
+The Worker retains gzip passthrough, including explicit manual encoding
+at the Cache API boundaries.
+The water and road layers from `main` remain below the buildings.
+
+Below zoom 13, clicking a building or pressing Enter on one zooms to 14
+without selecting it or opening a popup.
+The pointer cursor, popup, selection, and highlight start at zoom 13.
+Zooming below 13 closes an open popup and clears its selection.
+An absent or empty building ID cannot match the highlight filter.
+Share links naming a building still open at zoom 17.
+
+The archive is **147,309,058 bytes**, compared with 116,018,495 bytes in production
+and 183,549,114 bytes for the earlier full-property candidate.
+Its largest compressed tile is 3,911,525 bytes.
+The new archive's SHA-256 is
+`2f1f3d80c61246fee6c1622d15857ed6b267137f2433b7b4df7082bcd03c901f`.
+The production comparison archive was downloaded from remote R2 for this test;
+its SHA-256 is `b634ef50f72ff9d6c55b3a0ff6206bba4ac02da2b5b5c44e5c4d71df40d4030f`.
+The regional input remains the October 30 snapshot of 749,294 footprints.
+
+### Per-zoom archive measurements
+
+Counts are decoded MVT records, including clipped pieces and tile-buffer copies,
+not unique input footprints.
+Tile sizes are compressed bytes across all nonempty addressed tiles.
+
+| Zoom | Feature records | Tiles | Median bytes | Largest bytes |
+| --- | ---: | ---: | ---: | ---: |
+| 10 | 798,196 | 18 | 82,634 | 3,911,525 |
+| 11 | 801,793 | 52 | 18,671 | 2,398,258 |
+| 12 | 814,038 | 142 | 17,248.5 | 856,904 |
+| 13 | 814,601 | 450 | 11,682 | 538,576 |
+| 14 | 823,305 | 1,532 | 3,890.5 | 182,224 |
+| 15 | 837,674 | 5,333 | 1,439 | 62,599 |
+| 16 | 866,567 | 17,488 | 688 | 19,826 |
+
+### Mobile comparison
+
+Headless Chrome used a 390 by 844 CSS-pixel viewport at DPR 3,
+4x CPU throttling, 150 ms network latency, 1.6 Mbit/s download,
+and 750 Kbit/s upload.
+The center was longitude -122.676, latitude 45.523.
+The local Worker on port 8791 served the merged app, the production orientation
+archive, and either the downloaded production buildings or the new buildings.
+Only the buildings archive changed between comparisons.
+Browser caches were disabled in fresh contexts; the local Worker cache was reused.
+The host was an Apple M4 Max with native ANGLE/Metal rendering.
+This is Chromium emulation, not a physical phone or a mobile GPU test.
+
+The initial-load interval starts before navigation and ends when both map sources
+finish loading.
+The zoom interval starts with a five-second zoom animation from 13 to 10
+and includes the time needed to load the final tiles.
+Its initial zoom-13 preload is excluded from the interval and transferred bytes.
+Network totals use CDP encoded transfer lengths, including HTTP headers
+and partial response bytes for cancelled intermediate zoom requests.
+Heap figures are the peak sampled sum of the main page and MapLibre worker heaps,
+sampled every 250 ms.
+Long tasks are main-page PerformanceObserver entries longer than 50 ms;
+they do not include work inside MapLibre's worker.
+
+| Archive | Scenario | Bytes transferred | Tiles ready, seconds | Peak sampled JS heap, MiB | Long tasks (count / total ms / max ms) | Tab crash |
+| --- | --- | ---: | ---: | ---: | --- | --- |
+| Production | initial-z10 | 710,858 | 5.25 | 16.1 | 2 / 282 / 155 | No |
+| Production | zoom-13-to-10 | 965,528 | 5.53 | 51.0 | 0 / 0 / 0 | No |
+| New lean build | initial-z10 | 8,835,740 | 47.11 | 634.1 | 1 / 80 / 80 | No |
+| New lean build | zoom-13-to-10 | 9,105,661 | 46.66 | 308.5 | 0 / 0 / 0 | No |
+
+**The new archive fails the requested approximately 20-second loading gate.**
+Its initial zoom-10 load took 47.1 seconds; the zoom-out run took 46.7 seconds.
+No tab crashed, but the initial run sampled 634.1 MiB of JavaScript heap.
+No push, pull request, CI run, squash merge, deployment, or remote R2 upload
+was started.
+The requested shipping rollback copy was not created because step 8 was not reached.
+The production comparison download remains available in the temporary test directory.
+The next decision is how to reduce overview geometry or change its representation
+while preserving the year filter, before another shipping attempt.
+
+The initial harness tried a separate network override on the dedicated worker target.
+Chromium reported that optional command as unsupported.
+The page's network throttle stayed active; the measured transfer times reflect
+its configured 200,000 bytes per second download limit.
+The zoom runs omitted that unsupported call and completed without browser errors.
+Cancelled intermediate requests are expected during the camera animation.
+
+### Test artifacts
+
+New artifacts are under `/tmp/ageofthecity-low-zoom/lean-shipping/`.
+`new-tiles.json` contains the per-zoom metrics and metadata.
+`mobile-production-mobile.json` and `mobile-new-mobile.json` contain the initial loads.
+`mobile-production-zoom-mobile.json` and `mobile-new-zoom-mobile.json`
+contain zoom runs with partial-transfer accounting.
+The earlier zoom entries in `*-mobile.json` omit cancelled-response bytes
+and are superseded by those zoom files.
+
+Screenshots are `mobile-production-initial-z10.png`, `mobile-new-initial-z10.png`,
+`mobile-production-zoom-13-to-10-accounted.png`,
+and `mobile-new-zoom-13-to-10-accounted.png`.
+The new archive is `data/lean-buildings.pmtiles` in this worktree.
+The production comparison download is `production.pmtiles` in the artifact directory.
+The temporary harnesses are `browser/mobile.mjs`, `browser/mobile_zoom.mjs`,
+and `browser/lean_interactions.mjs` under `/tmp/ageofthecity-low-zoom/`.
+
+The required type check, 116 unit tests, site build, and three tile regression tests
+passed.
+The tile tests decode actual tiles and require only the construction year below
+zoom 13, with separate years and full popup properties from zoom 13 onward.
+The highlight tests use MapLibre's filter evaluator for missing, empty,
+null, selected, and year-filtered IDs.
+The headless interaction check passed at zooms 10, 11, 11.9, 12, 13, 14, 15, and 16.
+Click and Enter zoomed to 14 below the selection boundary, without a popup,
+pointer cursor, or highlight.
+The year filter worked at every tested zoom, and detail popups showed the selected
+building's address and year from zoom 13 onward.
+A generated share link selected the same building at zoom 17.
+`lean-interactions.json` records those checks; its clipboard write was captured
+by the harness rather than sent to the system clipboard.
+
+## Earlier full-property study
+
+The following sections preserve the earlier desktop comparison.
+Their full-property recommendation was superseded by the lean candidate above.
+Those desktop results do not override the failed mobile gate.
 
 Measured on November 1, 2026, using the published October 30 regional input:
 749,294 footprints, Tippecanoe 2.79.0, and the repository's MapLibre 6.16.0.
 The original input and archive were symlinked into the worktree for reading.
 All candidate outputs were written to separate files.
 
-## Recommendation
+## Earlier recommendation
 
 Keep full properties and separate footprints at every zoom.
 Use 14-bit coordinates at zooms 10 through 13 and 12-bit coordinates at zooms
