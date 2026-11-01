@@ -233,6 +233,15 @@ curl -s https://ageofthe.city/tiles/portland_buildings.json
 curl -I https://www.ageofthe.city/
 ```
 
+## Costs
+
+Archives total about 125 MB: buildings 116 MB, orientation 8.7 MB.
+[R2 Standard](https://developers.cloudflare.com/r2/pricing/) includes free monthly allowances
+of 10 GB-month, 1 million Class A operations, and 10 million Class B operations.
+Overages cost $0.015/GB-month, $4.50/million A, and $0.36/million B.
+R2 has no egress fees.
+[Workers Free](https://developers.cloudflare.com/workers/platform/pricing/) allows 100,000 requests/day.
+
 ## License and attribution
 
 The [City of Portland Terms of Use for Open Data](https://www.portlandmaps.com/img/tos.pdf)
