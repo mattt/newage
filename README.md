@@ -243,6 +243,41 @@ curl -s https://ageofthe.city/tiles/portland_buildings.json
 curl -I https://www.ageofthe.city/
 ```
 
+## Launch video
+
+`scripts/video/` renders a time lapse of the places in `scripts/video/places.json`,
+each one a center and zoom where the buildings appear year by year, as in Play.
+It reads `data/regional-buildings.ndjson`, `data/regional-buildings.pmtiles`,
+and `data/orientation.pmtiles`, and needs ffmpeg and Playwright's Chromium:
+
+```bash
+npx playwright-core install chromium-headless-shell
+npm run video:survey                 # buildings, years, and timing for each place
+npm run video:render -- --stills     # each place at the last year, and a contact sheet
+npm run video:render -- --only ladds-addition --size 1080x1920 --size 1920x1080
+npm run video:render -- --size 1920x1080 --years-per-second 20 --hold 1.5 --fade 0.3
+```
+
+The first run caches building centroids in `data/video/buildings.bin`.
+Output goes to the ignored `renders/` directory:
+one MP4 for each place and, for more than one place, `sequence.mp4`.
+Run `node scripts/video/render.ts --help` for every option.
+
+For each frame, a page with the site's style and year filter sets the latest year,
+waits for the map to finish drawing, and headless Chromium captures it.
+The short side of every frame is 540 CSS pixels,
+so a place's zoom shows the same width of ground in either orientation.
+A clip starts in the decade before its earliest buildings
+unless the place sets `start`.
+
+The soundtrack comes from the same buildings:
+each one in the frame plucks a synthesized string on the frame where its year arrives.
+Larger buildings play lower notes on a D major pentatonic scale,
+newer buildings sound brighter,
+and a building's position across the frame sets its pan.
+Busy years play louder, up to 45 notes a second.
+The mix is normalized to -16 LUFS integrated, with a limiter at about -2 dBFS.
+
 ## Costs
 
 The production buildings archive is about 116 MB; the reduced overview archive is 121 MB.

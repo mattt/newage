@@ -1,0 +1,64 @@
+<!doctype html>
+<!-- The render page for scripts/video/render.ts: the map alone, with the
+     site's colors and type, and a small place name and year. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Age of the City video frame</title>
+    <link rel="stylesheet" href="/maplibre-gl/maplibre-gl.css" />
+    <style>
+      :root {
+        /* From src/styles/global.css. */
+        --background: #050506;
+        --text: #e8e8ec;
+        font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+        color: var(--text);
+      }
+
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: var(--background);
+      }
+
+      #map {
+        position: fixed;
+        inset: 0;
+      }
+
+      .label {
+        position: fixed;
+        top: max(24px, 5vh);
+        left: 24px;
+        z-index: 1;
+        font-size: 17px;
+        line-height: 1.3;
+        text-shadow: 0 0 6px var(--background), 0 0 2px var(--background);
+      }
+
+      .label[hidden] {
+        display: none;
+      }
+
+      .name {
+        font-weight: 600;
+      }
+
+      .year {
+        font-variant-numeric: tabular-nums;
+        opacity: 0.8;
+      }
+    </style>
+    <script src="/pmtiles/pmtiles.js"></script>
+    <script type="module" src="/page/main.ts"></script>
+  </head>
+  <body>
+    <div id="map"></div>
+    <div class="label" id="label" hidden>
+      <div class="name" id="label-name"></div>
+      <div class="year" id="label-year"></div>
+    </div>
+  </body>
+</html>
