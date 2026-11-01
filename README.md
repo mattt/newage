@@ -167,6 +167,52 @@ Uploading the archive to R2 is a separate approved operation;
 coordinate it with deployment of the site containing the matching statistics.
 Keep the previous archive available for rollback.
 
+## Orientation layers (prototype)
+
+The map can draw faint water and roads under the buildings
+to help people find their place.
+They come from a separate archive, `data/orientation.pmtiles`,
+cropped from a daily [Protomaps basemap build](https://docs.protomaps.com/basemaps/downloads)
+of OpenStreetMap data:
+
+```bash
+bash scripts/build_orientation.sh            # newest build
+bash scripts/build_orientation.sh 20261101   # a specific build, for a repeatable archive
+```
+
+The script extracts zooms 0 through 14 for the bounds in `src/data/building-stats.json`,
+then uses `tile-join` to keep zooms 10 through 14,
+the `water` and `roads` layers, and the properties the style reads.
+Roads keep highways, major roads, and residential streets,
+without paths, rail, service roads, or driveways.
+Water keeps rivers, lakes, sloughs, and canals, without pools and fountains.
+The archive is about 9 MB; MapLibre overzooms it above zoom 14.
+
+The Worker serves any archive in the bucket by name,
+so the map reads this one from `/tiles/orientation.json`
+with no change to the Worker.
+For local development, upload it next to the buildings:
+
+```bash
+npx wrangler r2 object put ageofthe-city/orientation.pmtiles \
+  --file=data/orientation.pmtiles --local
+```
+
+The map draws the layers only when the URL names a variant,
+so the default map is unchanged:
+
+- `?orientation=water`: water as a slightly lifted fill, with a faint shoreline from zoom 12.
+- `?orientation=roads`: water, plus highways and major roads as hairlines.
+- `?orientation=streets`: as `roads`, with residential streets fading in from zoom 13.5 to 15.
+
+The colors in `src/lib/orientation.ts` are all darker than the color
+for buildings of unknown age, and the layers have no labels.
+
+OpenStreetMap data is available under the
+[Open Database License](https://www.openstreetmap.org/copyright).
+A map that shows these layers must credit OpenStreetMap contributors;
+the page does not have this credit yet.
+
 ## 3) Run the site locally
 
 The site is an Astro project at the repository root,
