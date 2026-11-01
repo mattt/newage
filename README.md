@@ -167,6 +167,52 @@ Uploading the archive to R2 is a separate approved operation;
 coordinate it with deployment of the site containing the matching statistics.
 Keep the previous archive available for rollback.
 
+## Orientation layers
+
+The map draws faint water and roads under the buildings
+to help people find their place.
+They come from a separate archive, `data/orientation.pmtiles`,
+cropped from a daily [Protomaps basemap build](https://docs.protomaps.com/basemaps/downloads)
+of OpenStreetMap data.
+The monthly refresh workflow does not rebuild it;
+rebuild it by hand when wanted:
+
+```bash
+bash scripts/build_orientation.sh            # newest build
+bash scripts/build_orientation.sh 20261101   # a specific build, for a repeatable archive
+```
+
+The script extracts zooms 0 through 14 for the bounds in `src/data/building-stats.json`,
+then uses `tile-join` to keep zooms 10 through 14,
+the `water` and `roads` layers, and the properties the style reads.
+Roads keep highways, major roads, and residential streets,
+without paths, rail, service roads, or driveways.
+Water keeps rivers, lakes, sloughs, and canals, without pools and fountains.
+The archive is about 9 MB; MapLibre overzooms it above zoom 14.
+
+The Worker serves any archive in the bucket by name,
+so the map reads this one from `/tiles/orientation.json`
+with no change to the Worker.
+Upload it next to the buildings, to local R2 for development
+or to the remote bucket for the site:
+
+```bash
+npx wrangler r2 object put ageofthe-city/orientation.pmtiles \
+  --file=data/orientation.pmtiles --local
+npx wrangler r2 object put ageofthe-city/orientation.pmtiles \
+  --file=data/orientation.pmtiles --remote
+```
+
+Upload the archive to the remote bucket before you deploy
+the first version of the site that reads `orientation.pmtiles`.
+
+The style in `src/lib/orientation.ts` fills water with a slightly lifted color
+and outlines it with a faint shoreline from zoom 12.
+Highways and major roads are hairlines at every zoom,
+and residential streets fade in from zoom 13.5 to 15.
+Every color is darker than the color for buildings of unknown age,
+and the layers have no labels.
+
 ## 3) Run the site locally
 
 The site is an Astro project at the repository root,
@@ -245,3 +291,9 @@ except where the data's page or metadata states otherwise.
 The building footprints come from the City of Portland
 Bureau of Planning and Sustainability,
 and the page credits them.
+
+The water and street lines come from OpenStreetMap
+through a [Protomaps basemap build](https://docs.protomaps.com/basemaps/downloads).
+OpenStreetMap data is available under the
+[Open Database License](https://www.openstreetmap.org/copyright),
+and the page credits OpenStreetMap contributors.
