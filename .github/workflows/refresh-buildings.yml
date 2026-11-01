@@ -1,0 +1,64 @@
+name: Refresh buildings
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 10 1 * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: refresh-buildings
+  cancel-in-progress: false
+
+jobs:
+  rebuild:
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: |
+          brew bundle
+          npm ci
+      - name: Test transformations
+        run: uv run --python 3.12 scripts/test_process_buildings.py
+      - name: Rebuild buildings and statistics
+        run: uv run --python 3.12 scripts/process_buildings.py
+      - name: Build and inspect PMTiles
+        run: |
+          bash scripts/build_tiles.sh
+          pmtiles show data/portland_buildings.pmtiles
+          pmtiles verify data/portland_buildings.pmtiles
+      - name: Record inspection output
+        run: |
+          pmtiles show data/portland_buildings.pmtiles > data/pmtiles-show.txt
+          shasum -a 256 data/portland_buildings.pmtiles src/data/building-stats.json > data/SHA256SUMS
+      - name: Store review artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: buildings-${{ github.run_id }}
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            data/portland_buildings.pmtiles
+            src/data/building-stats.json
+            data/pmtiles-show.txt
+            data/SHA256SUMS
+      - name: Explain publication requirements
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
+          Building data was rebuilt and verified. Download and inspect the workflow artifact.
+          The archive and statistics require separate approved publication.
+          Update the committed statistics through a pull request and coordinate the archive upload with the site deployment.
+          This workflow does not publish to R2 or deploy the site.
+          SUMMARY

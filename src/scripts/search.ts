@@ -3,9 +3,9 @@
 // allows connections only to this origin.
 //
 // The map script and this one share two events on document:
-// this script sends "newage:flyto" with { lat, lng, zoom? } to move the map
+// this script sends "ageofthecity:flyto" with { lat, lng, zoom? } to move the map
 // and select the building at a chosen address, and the map sends
-// "newage:selected" with { bldgId, yearBuilt, lat, lng, properties }
+// "ageofthecity:selected" with { bldgId, yearBuilt, lat, lng, properties }
 // after it opens the popup for a building.
 import { canSelectSearch } from "../lib/search-selection";
 import { canFillAddress, hasAddress, type SelectionKey } from "../lib/address-lookup";
@@ -76,7 +76,7 @@ if (form && input && popup && list && status) {
     answered = normalize(result.label);
     close();
     document.dispatchEvent(
-      new CustomEvent("newage:flyto", {
+      new CustomEvent("ageofthecity:flyto", {
         detail: { lat: result.lat, lng: result.lng, zoom: RESULT_ZOOM },
       }),
     );
@@ -217,7 +217,7 @@ if (form && input && popup && list && status) {
 let latest: SelectionKey | null = null;
 let lookup: AbortController | undefined;
 
-document.addEventListener("newage:selected", (event) => {
+document.addEventListener("ageofthecity:selected", (event) => {
   const detail = (event as CustomEvent<SelectionKey & { properties?: Record<string, unknown> }>)
     .detail;
   lookup?.abort();

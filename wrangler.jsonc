@@ -12,6 +12,7 @@
     { "pattern": "ageofthe.city", "custom_domain": true },
     { "pattern": "www.ageofthe.city", "custom_domain": true },
   ],
+  "rules": [{ "type": "Data", "globs": ["**/*.ttf"], "fallthrough": true }],
   "build": {
     "command": "npm run build",
     "watch_dir": ["src", "public", "integrations"],

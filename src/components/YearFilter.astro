@@ -1,0 +1,76 @@
+---
+// The year-range filter in the legend: a histogram of buildings by decade,
+// range inputs for the earliest and latest years, and the unknown, play,
+// and reset controls. src/scripts/year-filter.ts makes them work.
+import stats from "../data/building-stats.json";
+import { histogramBars } from "../lib/histogram";
+import { yearColor } from "../lib/palette";
+
+const WIDTH = 180;
+const HEIGHT = 36;
+const bounds = { earliest: stats.earliestYear, latest: stats.latestYear };
+const bars = histogramBars(stats.byDecade, bounds, WIDTH, HEIGHT);
+const peak = stats.byDecade.reduce((a, b) => (b.count > a.count ? b : a));
+const format = new Intl.NumberFormat("en-US");
+const summary =
+  `Histogram of ${format.format(stats.total - stats.unknown)} buildings with a known year, ` +
+  `by decade from the ${stats.byDecade[0].decade}s to the ${stats.byDecade.at(-1)!.decade}s, ` +
+  `with the most, ${format.format(peak.count)}, from the ${peak.decade}s.`;
+---
+
+<fieldset class="year-filter" id="year-filter" data-earliest={bounds.earliest} data-latest={bounds.latest}>
+  <legend>Show years</legend>
+  <svg
+    class="histogram"
+    viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+    preserveAspectRatio="none"
+    role="img"
+    aria-label={summary}
+  >
+    {
+      bars.map((bar) => (
+        <rect
+          x={bar.x.toFixed(2)}
+          y={bar.y.toFixed(2)}
+          width={bar.width.toFixed(2)}
+          height={bar.height.toFixed(2)}
+          fill={yearColor(bar.decade + 5)}
+          data-start={bar.start}
+          data-end={bar.end}
+        />
+      ))
+    }
+  </svg>
+  <div class="year-input">
+    <label for="year-min">Earliest</label>
+    <input
+      type="range"
+      id="year-min"
+      min={bounds.earliest}
+      max={bounds.latest}
+      step="1"
+      value={bounds.earliest}
+    />
+    <output id="year-min-value" for="year-min">{bounds.earliest}</output>
+  </div>
+  <div class="year-input">
+    <label for="year-max">Latest</label>
+    <input
+      type="range"
+      id="year-max"
+      min={bounds.earliest}
+      max={bounds.latest}
+      step="1"
+      value={bounds.latest}
+    />
+    <output id="year-max-value" for="year-max">{bounds.latest}</output>
+  </div>
+  <label class="include-unknown">
+    <input type="checkbox" id="include-unknown" checked />
+    Include unknown
+  </label>
+  <div class="year-actions">
+    <button type="button" id="year-play" aria-pressed="false">Play</button>
+    <button type="button" id="year-reset">Reset</button>
+  </div>
+</fieldset>

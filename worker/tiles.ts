@@ -27,7 +27,7 @@ const ARCHIVE_NAME = /^[A-Za-z0-9_-]+$/;
 
 class KeyNotFoundError extends Error {}
 
-async function nativeDecompress(
+export async function nativeDecompress(
   buf: ArrayBuffer,
   compression: Compression
 ): Promise<ArrayBuffer> {
@@ -44,7 +44,7 @@ async function nativeDecompress(
 
 const CACHE = new ResolvedValueCache(25, undefined, nativeDecompress);
 
-class R2Source implements Source {
+export class R2Source implements Source {
   env: TilesEnv;
   archiveName: string;
 

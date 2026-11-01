@@ -1,6 +1,8 @@
 import { GEOCODE_PREFIX, handleGeocode } from "./geocode";
 import { handleTiles, TILES_PREFIX, type TilesEnv } from "./tiles";
 
+import { handleOg, rewriteHome } from "./og";
+
 // Serves the Astro build in dist/ and the PMTiles archive in R2 at the same
 // origin. wrangler.jsonc runs this Worker first for every request. Responses
 // from env.ASSETS.fetch get the security and caching rules in
@@ -63,6 +65,7 @@ export default {
       return withNosniff(await handleTiles(request, env, ctx));
     }
 
-    return slashRedirect(url) ?? env.ASSETS.fetch(request);
+    if (url.pathname === "/og/building.png") return handleOg(request, env, ctx);
+    return slashRedirect(url) ?? rewriteHome(request, env);
   },
 } satisfies ExportedHandler<Env>;
