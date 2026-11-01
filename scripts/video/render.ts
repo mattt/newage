@@ -10,22 +10,12 @@ import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
 import { chromium, type Browser, type Page } from "playwright-core";
 import sharp from "sharp";
-import {
-  render as renderAudio,
-  notes,
-  pluck,
-  SAMPLE_RATE,
-  velocity,
-  writeWav,
-  type Note,
-  type NoteEvent,
-  type Voice,
-} from "./audio.ts";
+import { render as renderAudio, notes, SAMPLE_RATE, velocity, writeWav, type Note, type NoteEvent } from "./audio.ts";
 import { loadBuildings } from "./buildings.ts";
 import { projector } from "./frame.ts";
 import { writeMidi, type Section } from "./midi.ts";
 import { DEFAULT_PLACES, loadPlaces, parseSize, startYear, type OutputSize, type Place } from "./places.ts";
-import { loadSampler } from "./sampler.ts";
+import { INSTRUMENTS, loadInstrument } from "./instruments.ts";
 import { startServer } from "./server.ts";
 
 const HELP = `Usage: node scripts/video/render.ts [options]
@@ -41,8 +31,8 @@ const HELP = `Usage: node scripts/video/render.ts [options]
   --no-labels             leave out the place name and year
   --no-unknown            leave out buildings of unknown year
   --no-audio              leave out the soundtrack
-  --instrument NAME       pluck, the synthesized default, or a sampled instrument
-                          such as harp (see scripts/video/fetch_samples.sh)
+  --instrument NAME       ${INSTRUMENTS.join(", ")} (default pluck);
+                          harp and marimba need scripts/video/fetch_samples.sh
   --samples DIR           samples for the instrument (default data/video/samples/NAME)
   --reuse-frames          keep frames rendered by an earlier run, to change only the sound
   --stills                render each place at its last year, and a contact sheet
@@ -88,8 +78,7 @@ const LIMIT = 0.79;
 const INSTRUMENT = options.instrument;
 /** Outputs with another instrument than the default get its name, so they do not replace each other. */
 const SUFFIX = INSTRUMENT === "pluck" ? "" : `-${INSTRUMENT}`;
-const voice: Voice =
-  INSTRUMENT === "pluck" ? pluck : await loadSampler(options.samples ?? join("data/video/samples", INSTRUMENT));
+const instrument = await loadInstrument(INSTRUMENT, options.samples);
 
 function positive(name: "fps" | "years-per-second"): number {
   const value = Number(options[name]);
@@ -357,7 +346,14 @@ async function assemble(clips: Clip[], videos: string[], output: string, work: s
     const raw = join(work, `${name}-raw.wav`);
     const normalized = join(work, `${name}.wav`);
     const played = notes(events);
-    await writeWav(raw, renderAudio(played, total, voice));
+    const soundSections = clips.map((clip, i) => ({
+      start: offsets[i],
+      seconds: clip.seconds,
+      firstYear: clip.start,
+      lastYear: clip.end,
+      yearsPerSecond: YEARS_PER_SECOND,
+    }));
+    await writeWav(raw, renderAudio(played, total, instrument, soundSections));
     await normalize(raw, normalized);
     const sections = clips.map((clip, i) => ({ id: clip.place.id, name: clip.place.name, start: offsets[i] }));
     await exportSound(join(dirname(output), name), normalized, played, sections, total);

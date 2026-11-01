@@ -1,6 +1,6 @@
 // Makes the soundtrack from building events: each building that appears in the
 // frame plucks a string. The default voice is synthesized; sampler.ts supplies
-// recorded instruments that play the same notes.
+// recorded instruments, and instruments.ts other voices, that play the same notes.
 //
 // - Time: a building sounds on the frame where its year arrives. Buildings of
 //   the same year spread across that year's share of the clip, like a strum.
@@ -139,16 +139,47 @@ export function midiFrequency(midi: number): number {
 /** Adds one note to the stereo output. */
 export type Voice = (note: Note, left: Float32Array, right: Float32Array) => void;
 
+/** A place's clip in the soundtrack, for sound that follows the clip rather than its notes. */
+export interface SoundSection {
+  /** Seconds from the start of the output. */
+  start: number;
+  seconds: number;
+  firstYear: number;
+  lastYear: number;
+  yearsPerSecond: number;
+}
+
+/** Processes the stereo output in place. */
+export type Effect = (left: Float32Array, right: Float32Array) => void;
+
+export interface Instrument {
+  voice: Voice;
+  /** Sound under the notes, such as a pad, which follows the sections. */
+  bed?: (left: Float32Array, right: Float32Array, sections: SoundSection[]) => void;
+  /** Effects on the notes and bed, in order, before the room. */
+  effects?: Effect[];
+  /** The level of the room reverb; 0.35 by default. */
+  reverb?: number;
+}
+
 /** Renders notes to stereo samples, with a little room reverb. */
-export function render(noteList: Note[], seconds: number, voice: Voice = pluck): [Float32Array, Float32Array] {
+export function render(
+  noteList: Note[],
+  seconds: number,
+  instrument: Instrument = { voice: pluck },
+  sections: SoundSection[] = [],
+): [Float32Array, Float32Array] {
   const length = Math.ceil(seconds * SAMPLE_RATE);
   const left = new Float32Array(length);
   const right = new Float32Array(length);
-  for (const note of noteList) voice(note, left, right);
+  for (const note of noteList) instrument.voice(note, left, right);
+  instrument.bed?.(left, right, sections);
+  for (const effect of instrument.effects ?? []) effect(left, right);
   const [wetLeft, wetRight] = reverb(left, right);
+  const send = instrument.reverb ?? 0.35;
   for (let i = 0; i < length; i++) {
-    left[i] = 0.8 * left[i] + 0.35 * wetLeft[i];
-    right[i] = 0.8 * right[i] + 0.35 * wetRight[i];
+    left[i] = 0.8 * left[i] + send * wetLeft[i];
+    right[i] = 0.8 * right[i] + send * wetRight[i];
   }
   return [left, right];
 }

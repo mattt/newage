@@ -1,6 +1,6 @@
 // Plays the soundtrack's notes on a recorded instrument, from a directory of
 // WAV files named with their notes, such as KSHarp_A4_mf.wav.
-// scripts/video/fetch_samples.sh downloads the harp from VSCO 2 CE (CC0).
+// scripts/video/fetch_samples.sh downloads instruments from VSCO 2 CE (CC0).
 import { spawn } from "node:child_process";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
@@ -20,21 +20,26 @@ interface Sample {
 
 const NAMES: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 
-/** Returns the MIDI note in a file name such as KSHarp_A4_mf.wav, or null. */
+/** Returns the MIDI note in a file name such as KSHarp_A4_mf.wav or glock_C5.wav, or null. */
 export function noteInName(name: string): number | null {
-  const match = /_([A-G])(#|b)?(-?\d)_/.exec(name);
+  const match = /_([A-G])(#|b)?(-?\d)(?=[_.])/.exec(name);
   if (!match) return null;
   const accidental = match[2] === "#" ? 1 : match[2] === "b" ? -1 : 0;
   return 12 * (Number(match[3]) + 1) + NAMES[match[1]] + accidental;
 }
 
-export async function loadSampler(directory: string): Promise<Voice> {
+export interface SamplerOptions {
+  /** Semitones to add to the notes in the file names, when they name another octave than they sound. */
+  nameOffset?: number;
+}
+
+export async function loadSampler(directory: string, { nameOffset = 0 }: SamplerOptions = {}): Promise<Voice> {
   const files = (await readdir(directory)).filter((name) => name.endsWith(".wav"));
   const samples: Sample[] = [];
   for (const name of files) {
     const midi = noteInName(name);
     if (midi === null) continue;
-    samples.push({ midi, ...prepare(await decode(join(directory, name))) });
+    samples.push({ midi: midi + nameOffset, ...prepare(await decode(join(directory, name))) });
   }
   if (samples.length === 0) throw new Error(`No samples named with notes in ${directory}`);
   samples.sort((a, b) => a.midi - b.midi);
