@@ -19,12 +19,7 @@ import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
 import stats from "../data/building-stats.json";
 import { textProperty, yearBuilt } from "../lib/building";
 import { centroid, type FootprintGeometry } from "../lib/centroid";
-import {
-  ORIENTATION_SOURCE,
-  ORIENTATION_TILEJSON,
-  orientationLayers,
-  parseVariant,
-} from "../lib/orientation";
+import { ORIENTATION_SOURCE, ORIENTATION_TILEJSON, orientationLayers } from "../lib/orientation";
 import { BACKGROUND, UNKNOWN, YEAR_STOPS } from "../lib/palette";
 import { parseShareParams, shareUrl } from "../lib/share";
 import { allFilters, YEAR_BUILT, yearFilter, type YearRange } from "../lib/year-filter";
@@ -60,7 +55,6 @@ const FLYTO_MIN_ZOOM = 16;
 
 const bounds = { earliest: stats.earliestYear, latest: stats.latestYear };
 const shared = parseShareParams(window.location.search);
-const orientation = parseVariant(window.location.search);
 
 const map = new Map({
   container: "map",
@@ -82,12 +76,10 @@ const map = new Map({
         type: "vector",
         url: new URL("/tiles/portland_buildings.json", window.location.href).href,
       },
-      ...(orientation && {
-        [ORIENTATION_SOURCE]: {
-          type: "vector",
-          url: new URL(ORIENTATION_TILEJSON, window.location.href).href,
-        },
-      }),
+      [ORIENTATION_SOURCE]: {
+        type: "vector",
+        url: new URL(ORIENTATION_TILEJSON, window.location.href).href,
+      },
     },
     layers: [
       {
@@ -96,7 +88,7 @@ const map = new Map({
         paint: { "background-color": BACKGROUND },
       },
       // Faint water and roads, below the buildings.
-      ...(orientation ? orientationLayers(orientation) : []),
+      ...orientationLayers(),
       {
         id: FILL,
         type: "fill",

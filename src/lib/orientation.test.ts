@@ -1,19 +1,7 @@
 import { wcagLuminance } from "culori";
 import { describe, expect, it } from "vite-plus/test";
-import { ROAD, SHORE, STREET, VARIANTS, WATER, orientationLayers, parseVariant } from "./orientation";
+import { ROAD, SHORE, STREET, WATER, orientationLayers } from "./orientation";
 import { BACKGROUND, UNKNOWN } from "./palette";
-
-describe("parseVariant", () => {
-  it("reads a known variant", () => {
-    expect(parseVariant("?orientation=streets")).toBe("streets");
-    expect(parseVariant("?bldg=1&orientation=water")).toBe("water");
-  });
-
-  it("ignores a missing or unknown variant", () => {
-    expect(parseVariant("")).toBeNull();
-    expect(parseVariant("?orientation=satellite")).toBeNull();
-  });
-});
 
 describe("orientation colors", () => {
   it("stay between the background and the dimmest building color", () => {
@@ -28,8 +16,6 @@ describe("orientation colors", () => {
 
 describe("orientationLayers", () => {
   it("adds no labels", () => {
-    for (const variant of VARIANTS) {
-      expect(orientationLayers(variant).map((layer) => layer.type)).not.toContain("symbol");
-    }
+    expect(orientationLayers().map((layer) => layer.type)).not.toContain("symbol");
   });
 });

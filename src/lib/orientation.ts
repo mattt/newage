@@ -3,9 +3,6 @@ import type { ExpressionSpecification, LayerSpecification } from "maplibre-gl";
 // Faint water and roads under the buildings, from data/orientation.pmtiles
 // (see scripts/build_orientation.sh). The buildings are the subject, so every
 // color here is darker than UNKNOWN, the dimmest building color.
-//
-// This is a prototype: the map draws a variant only when the page URL names
-// one, as in "?orientation=streets". Without the parameter, the map is unchanged.
 
 export const ORIENTATION_SOURCE = "orientation";
 export const ORIENTATION_TILEJSON = "/tiles/orientation.json";
@@ -14,15 +11,6 @@ export const WATER = "#0a0f15";
 export const SHORE = "#16202b";
 export const ROAD = "#1c1c21";
 export const STREET = "#151519";
-
-export const VARIANTS = ["water", "roads", "streets"] as const;
-export type Variant = (typeof VARIANTS)[number];
-
-/** Reads the variant from a query string such as "?orientation=roads". */
-export function parseVariant(search: string): Variant | null {
-  const value = new URLSearchParams(search).get("orientation");
-  return VARIANTS.find((variant) => variant === value) ?? null;
-}
 
 const POLYGON: ExpressionSpecification = ["==", ["geometry-type"], "Polygon"];
 const LINE: ExpressionSpecification = ["==", ["geometry-type"], "LineString"];
@@ -122,14 +110,7 @@ function minorRoads(): LayerSpecification {
   };
 }
 
-/** The layers for a variant, in drawing order, for placement below the buildings. */
-export function orientationLayers(variant: Variant): LayerSpecification[] {
-  switch (variant) {
-    case "water":
-      return water();
-    case "roads":
-      return [...water(), majorRoads()];
-    case "streets":
-      return [...water(), minorRoads(), majorRoads()];
-  }
+/** The water and road layers, in drawing order, for placement below the buildings. */
+export function orientationLayers(): LayerSpecification[] {
+  return [...water(), minorRoads(), majorRoads()];
 }

@@ -167,13 +167,15 @@ Uploading the archive to R2 is a separate approved operation;
 coordinate it with deployment of the site containing the matching statistics.
 Keep the previous archive available for rollback.
 
-## Orientation layers (prototype)
+## Orientation layers
 
-The map can draw faint water and roads under the buildings
+The map draws faint water and roads under the buildings
 to help people find their place.
 They come from a separate archive, `data/orientation.pmtiles`,
 cropped from a daily [Protomaps basemap build](https://docs.protomaps.com/basemaps/downloads)
-of OpenStreetMap data:
+of OpenStreetMap data.
+The monthly refresh workflow does not rebuild it;
+rebuild it by hand when wanted:
 
 ```bash
 bash scripts/build_orientation.sh            # newest build
@@ -191,22 +193,25 @@ The archive is about 9 MB; MapLibre overzooms it above zoom 14.
 The Worker serves any archive in the bucket by name,
 so the map reads this one from `/tiles/orientation.json`
 with no change to the Worker.
-For local development, upload it next to the buildings:
+Upload it next to the buildings, to local R2 for development
+or to the remote bucket for the site:
 
 ```bash
 npx wrangler r2 object put ageofthe-city/orientation.pmtiles \
   --file=data/orientation.pmtiles --local
+npx wrangler r2 object put ageofthe-city/orientation.pmtiles \
+  --file=data/orientation.pmtiles --remote
 ```
 
-The map draws the layers only when the URL names a variant,
-so the default map is unchanged:
+Upload the archive to the remote bucket before you deploy
+the first version of the site that reads `orientation.pmtiles`.
 
-- `?orientation=water`: water as a slightly lifted fill, with a faint shoreline from zoom 12.
-- `?orientation=roads`: water, plus highways and major roads as hairlines.
-- `?orientation=streets`: as `roads`, with residential streets fading in from zoom 13.5 to 15.
-
-The colors in `src/lib/orientation.ts` are all darker than the color
-for buildings of unknown age, and the layers have no labels.
+The style in `src/lib/orientation.ts` fills water with a slightly lifted color
+and outlines it with a faint shoreline from zoom 12.
+Highways and major roads are hairlines at every zoom,
+and residential streets fade in from zoom 13.5 to 15.
+Every color is darker than the color for buildings of unknown age,
+and the layers have no labels.
 
 OpenStreetMap data is available under the
 [Open Database License](https://www.openstreetmap.org/copyright).
