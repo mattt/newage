@@ -3,8 +3,8 @@
 //
 // Usage: node scripts/video/survey.ts [places.json] [--size 1080x1920] [--json]
 import { latestYear, loadBuildings, type Buildings } from "./buildings.ts";
-import { projector, type Viewport } from "./frame.ts";
-import { DEFAULT_PLACES, loadPlaces, parseSize, startYear, type Place } from "./places.ts";
+import { projector } from "./frame.ts";
+import { cameraFor, DEFAULT_PLACES, loadPlaces, parseSize, startYear, type OutputSize, type Place } from "./places.ts";
 
 export interface PlaceStats {
   id: string;
@@ -28,8 +28,8 @@ export interface PlaceStats {
   activeShare: number;
 }
 
-export function survey(buildings: Buildings, place: Place, viewport: Viewport, lastYear: number): PlaceStats {
-  const project = projector(place, viewport);
+export function survey(buildings: Buildings, place: Place, size: OutputSize, lastYear: number): PlaceStats {
+  const project = projector(cameraFor(place, size), size.viewport);
   const years: number[] = [];
   let count = 0;
   for (let i = 0; i < buildings.count; i++) {
@@ -71,7 +71,7 @@ if (import.meta.main) {
   const places = await loadPlaces(file);
   const buildings = await loadBuildings();
   const lastYear = latestYear(buildings);
-  const rows = places.map((place) => survey(buildings, place, size.viewport, lastYear));
+  const rows = places.map((place) => survey(buildings, place, size, lastYear));
   if (json) {
     console.log(JSON.stringify(rows, null, 2));
   } else {

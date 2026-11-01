@@ -297,6 +297,31 @@ and `--reuse-frames` keeps earlier frames so that only the sound changes:
 npm run video:render -- --size 1920x1080 --reuse-frames --instrument harp
 ```
 
+### Whole-city shot
+
+`scripts/video/region.json` frames the whole region.
+A place's `frames` gives a center and zoom for each output size,
+because a wide and a tall frame hold the city differently.
+`node scripts/video/fit.ts --share 0.93` finds, for each size,
+the tightest frame that holds that share of all building centroids.
+
+At this scale most buildings are smaller than a pixel,
+and the zooms fall below the archive's lowest zoom, 10.
+`--supersample 4` draws the map at four times the output size, four times closer,
+so that it loads finer tiles, and scales each frame down with a Lanczos filter.
+Thousands of buildings arrive each year, so `--busiest auto` scales the notes
+to the busiest year in view, instead of playing every year at the note cap:
+
+```bash
+npm run video:render -- --places scripts/video/region.json \
+  --size 1920x1080 --size 1080x1920 --years-per-second 6 --hold 4 \
+  --supersample 4 --busiest auto --instrument harp \
+  --buildings-tiles data/production-buildings.pmtiles
+```
+
+This shot uses the production archive, which keeps nearly every building
+at zooms 10 to 12.
+
 ## Costs
 
 The production buildings archive is about 116 MB; the reduced overview archive is 121 MB.

@@ -14,7 +14,16 @@ import { render as renderAudio, notes, SAMPLE_RATE, velocity, writeWav, type Not
 import { loadBuildings } from "./buildings.ts";
 import { projector } from "./frame.ts";
 import { writeMidi, type Section } from "./midi.ts";
-import { DEFAULT_PLACES, loadPlaces, parseSize, startYear, type OutputSize, type Place } from "./places.ts";
+import {
+  cameraFor,
+  DEFAULT_PLACES,
+  loadPlaces,
+  parseSize,
+  SHORT_SIDE,
+  startYear,
+  type OutputSize,
+  type Place,
+} from "./places.ts";
 import { INSTRUMENTS, loadInstrument } from "./instruments.ts";
 import { startServer } from "./server.ts";
 
@@ -35,6 +44,11 @@ const HELP = `Usage: node scripts/video/render.ts [options]
                           harp and marimba need scripts/video/fetch_samples.sh
   --samples DIR           samples for the instrument (default data/video/samples/NAME)
   --reuse-frames          keep frames rendered by an earlier run, to change only the sound
+  --supersample N         draw the map at N times the output size and scale it down,
+                          at a zoom N times closer, so the map loads finer tiles
+  --busiest N|auto        let note count and level keep rising with density up to
+                          N buildings in one year, or the busiest year in view (auto),
+                          instead of reaching the note cap at a few buildings
   --stills                render each place at its last year, and a contact sheet
   --buildings-tiles FILE  default data/regional-buildings.pmtiles
   --orientation-tiles FILE  default data/orientation.pmtiles
@@ -56,6 +70,8 @@ const { values: options } = parseArgs({
     instrument: { type: "string", default: "pluck" },
     samples: { type: "string" },
     "reuse-frames": { type: "boolean", default: false },
+    supersample: { type: "string", default: "0" },
+    busiest: { type: "string" },
     stills: { type: "boolean", default: false },
     "buildings-tiles": { type: "string", default: "data/regional-buildings.pmtiles" },
     "orientation-tiles": { type: "string", default: "data/orientation.pmtiles" },
@@ -79,6 +95,10 @@ const INSTRUMENT = options.instrument;
 /** Outputs with another instrument than the default get its name, so they do not replace each other. */
 const SUFFIX = INSTRUMENT === "pluck" ? "" : `-${INSTRUMENT}`;
 const instrument = await loadInstrument(INSTRUMENT, options.samples);
+const SUPERSAMPLE = Number(options.supersample);
+if (!(SUPERSAMPLE >= 0)) throw new Error("--supersample must be 0 or more");
+const BUSIEST = options.busiest === undefined ? undefined : options.busiest === "auto" ? "auto" : Number(options.busiest);
+if (typeof BUSIEST === "number" && !(BUSIEST > 0)) throw new Error("--busiest must be a positive number or auto");
 
 function positive(name: "fps" | "years-per-second"): number {
   const value = Number(options[name]);
@@ -94,6 +114,47 @@ interface FrameState {
   bounds: { earliest: number; latest: number };
   includeUnknown: boolean;
   name: string | null;
+  /** The label's size relative to a frame whose short side is 540 CSS pixels. */
+  labelScale: number;
+}
+
+/** How the page draws frames for an output size. */
+interface Capture {
+  /** The page's size in CSS pixels. */
+  width: number;
+  height: number;
+  deviceScaleFactor: number;
+  /** Added to each place's zoom, which assumes a short side of 540 CSS pixels. */
+  zoomOffset: number;
+  /** Whether the screenshot is larger than the output and needs scaling down. */
+  downscale: boolean;
+}
+
+/**
+ * By default, the page's short side is 540 CSS pixels at the pixel ratio that
+ * fills the output. With supersampling, the page is N times the output size at
+ * a pixel ratio of 1, and every zoom grows to match, so the map loads the finer
+ * tiles of a closer zoom; the frames are then scaled down.
+ */
+function captureFor(size: OutputSize): Capture {
+  if (SUPERSAMPLE === 0) {
+    return {
+      width: Math.round(size.viewport.width),
+      height: Math.round(size.viewport.height),
+      deviceScaleFactor: size.pixelRatio,
+      zoomOffset: 0,
+      downscale: false,
+    };
+  }
+  const width = Math.round(size.width * SUPERSAMPLE);
+  const height = Math.round(size.height * SUPERSAMPLE);
+  return {
+    width,
+    height,
+    deviceScaleFactor: 1,
+    zoomOffset: Math.log2(Math.min(width, height) / SHORT_SIDE),
+    downscale: SUPERSAMPLE > 1,
+  };
 }
 
 interface Clip {
@@ -146,9 +207,10 @@ try {
 }
 
 async function openPage(browser: Browser, size: OutputSize): Promise<Page> {
+  const capture = captureFor(size);
   const page = await browser.newPage({
-    viewport: { width: Math.round(size.viewport.width), height: Math.round(size.viewport.height) },
-    deviceScaleFactor: size.pixelRatio,
+    viewport: { width: capture.width, height: capture.height },
+    deviceScaleFactor: capture.deviceScaleFactor,
   });
   page.on("pageerror", (error) => console.error("page error:", error.message));
   await page.goto(server.url);
@@ -165,14 +227,17 @@ async function show(page: Page, state: FrameState): Promise<Buffer> {
   return page.screenshot({ type: "png", animations: "disabled", caret: "hide" });
 }
 
-function frameState(place: Place, year: number): FrameState {
+function frameState(place: Place, size: OutputSize, year: number): FrameState {
+  const camera = cameraFor(place, size);
+  const capture = captureFor(size);
   return {
-    center: place.center,
-    zoom: place.zoom,
+    center: camera.center,
+    zoom: camera.zoom + capture.zoomOffset,
     year,
     bounds,
     includeUnknown: !options["no-unknown"],
     name: options["no-labels"] ? null : place.name,
+    labelScale: 2 ** capture.zoomOffset,
   };
 }
 
@@ -184,7 +249,11 @@ async function renderStills(page: Page, size: OutputSize, directory: string) {
   const files: string[] = [];
   for (const place of places) {
     const file = join(stills, `${place.id}.png`);
-    await writeFile(file, await show(page, frameState(place, bounds.latest)));
+    let still = await show(page, frameState(place, size, bounds.latest));
+    if (captureFor(size).downscale) {
+      still = await sharp(still).resize(size.width, size.height, { kernel: "lanczos3" }).png().toBuffer();
+    }
+    await writeFile(file, still);
     files.push(file);
     console.log(file);
   }
@@ -223,7 +292,7 @@ async function contactSheet(files: string[], size: OutputSize, output: string) {
 // Video
 
 function planClip(place: Place, size: OutputSize): Clip {
-  const project = projector(place, size.viewport);
+  const project = projector(cameraFor(place, size), size.viewport);
   const inFrame: number[] = [];
   const years: number[] = [];
   for (let i = 0; i < buildings.count; i++) {
@@ -273,7 +342,7 @@ async function renderVideo(page: Page, size: OutputSize, directory: string) {
   for (const clip of clips) {
     const began = performance.now();
     const video = join(work, `${clip.place.id}.mkv`);
-    if (!(options["reuse-frames"] && (await exists(video)))) await renderFrames(page, clip, video);
+    if (!(options["reuse-frames"] && (await exists(video)))) await renderFrames(page, clip, size, video);
     const output = join(directory, `${clip.place.id}${SUFFIX}.mp4`);
     await assemble([clip], [video], output, work);
     const seconds = (performance.now() - began) / 1000;
@@ -290,11 +359,14 @@ async function renderVideo(page: Page, size: OutputSize, directory: string) {
 }
 
 /** Captures each distinct frame once, and repeats it while the year holds. */
-async function renderFrames(page: Page, clip: Clip, output: string) {
+async function renderFrames(page: Page, clip: Clip, size: OutputSize, output: string) {
+  const scale = captureFor(size).downscale
+    ? ["-vf", `scale=${size.width}:${size.height}:flags=lanczos+accurate_rnd+full_chroma_int`]
+    : [];
   const ffmpeg = spawn(
     "ffmpeg",
     ["-hide_banner", "-loglevel", "error", "-y", "-f", "image2pipe", "-framerate", String(FPS),
-      "-c:v", "png", "-i", "-", "-c:v", "libx264rgb", "-crf", "0", "-preset", "ultrafast", output],
+      "-c:v", "png", "-i", "-", ...scale, "-c:v", "libx264rgb", "-crf", "0", "-preset", "ultrafast", output],
     { stdio: ["pipe", "inherit", "inherit"] },
   );
   const done = exited(ffmpeg, "ffmpeg");
@@ -302,7 +374,7 @@ async function renderFrames(page: Page, clip: Clip, output: string) {
   let frame: Buffer | undefined;
   for (const [f, year] of clip.years.entries()) {
     if (year !== previousYear) {
-      frame = await show(page, frameState(clip.place, year));
+      frame = await show(page, frameState(clip.place, size, year));
       previousYear = year;
     }
     if (!ffmpeg.stdin.write(frame)) await new Promise((resolve) => ffmpeg.stdin.once("drain", resolve));
@@ -345,7 +417,7 @@ async function assemble(clips: Clip[], videos: string[], output: string, work: s
     );
     const raw = join(work, `${name}-raw.wav`);
     const normalized = join(work, `${name}.wav`);
-    const played = notes(events);
+    const played = notes(events, BUSIEST);
     const soundSections = clips.map((clip, i) => ({
       start: offsets[i],
       seconds: clip.seconds,

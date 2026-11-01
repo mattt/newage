@@ -76,14 +76,30 @@ export interface Note {
   buildings: number;
 }
 
-/** Chooses the notes that the events play. */
-export function notes(events: NoteEvent[]): Note[] {
+/**
+ * Chooses the notes that the events play.
+ *
+ * By default, a year with FULL buildings plays at full level, and any year with
+ * more buildings than the note cap plays every voice; that suits a neighborhood.
+ * In a frame with thousands of buildings a year, nearly every year would reach
+ * both, and the soundtrack would be a wall. With `busiest`, a year's share of
+ * that many buildings (or of the busiest year in the events, for "auto") sets
+ * both: the voices grow with its square root and the level with its fourth
+ * root, so that a busier year has more notes as well as louder ones.
+ */
+export function notes(events: NoteEvent[], busiest?: number | "auto"): Note[] {
   const result: Note[] = [];
-  for (const group of groups(events)) {
+  const all = groups(events);
+  const full = busiest === "auto" ? Math.max(1, ...all.map((group) => group.length)) : (busiest ?? FULL);
+  for (const group of all) {
     const n = group.length;
     const { yearSeconds } = group[0];
-    const voices = Math.max(1, Math.round(NOTES_PER_SECOND * yearSeconds));
-    const level = Math.sqrt(Math.min(1, Math.log1p(n) / Math.log1p(FULL)));
+    const cap = Math.max(1, Math.round(NOTES_PER_SECOND * yearSeconds));
+    const density = Math.sqrt(Math.min(1, n / full));
+    const level = busiest === undefined
+      ? Math.sqrt(Math.min(1, Math.log1p(n) / Math.log1p(full)))
+      : Math.sqrt(density);
+    const voices = busiest === undefined ? cap : Math.max(1, Math.round(cap * density));
     // A stable choice of voices: the order of their seeds, not of the data file.
     const chosen = [...group].sort((a, b) => hash(a.seed) - hash(b.seed)).slice(0, voices);
     const amplitude = (MAX_AMPLITUDE * level) / Math.sqrt(chosen.length);

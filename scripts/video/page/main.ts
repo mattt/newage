@@ -97,6 +97,8 @@ interface FrameState {
   includeUnknown: boolean;
   /** The place name, or null for no label. */
   name: string | null;
+  /** The label's size relative to a frame whose short side is 540 CSS pixels. */
+  labelScale: number;
 }
 
 let current = "";
@@ -116,6 +118,7 @@ async function show(state: FrameState): Promise<string[]> {
   map.setFilter(FILL, filter);
   map.setFilter(OUTLINE, filter);
   label.hidden = state.name === null;
+  label.style.setProperty("--label-scale", String(state.labelScale));
   labelName.textContent = state.name ?? "";
   labelYear.textContent = String(state.year);
   await settled();

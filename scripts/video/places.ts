@@ -11,6 +11,13 @@ export interface Place extends Camera {
   name: string;
   /** The first year of the clip; by default, from the buildings in the frame. */
   start?: number;
+  /** Cameras for particular output sizes, keyed like "1920x1080", in place of the center and zoom. */
+  frames?: Record<string, Camera>;
+}
+
+/** The place's camera for an output size. */
+export function cameraFor(place: Place, size: OutputSize): Camera {
+  return place.frames?.[size.name] ?? { center: place.center, zoom: place.zoom };
 }
 
 export async function loadPlaces(file: string): Promise<Place[]> {
@@ -27,9 +34,11 @@ export async function loadPlaces(file: string): Promise<Place[]> {
  * The short side of every frame is this many CSS pixels, whatever the output size,
  * so that a place's zoom shows the same width of ground in either orientation.
  */
-const SHORT_SIDE = 540;
+export const SHORT_SIDE = 540;
 
 export interface OutputSize {
+  /** The size as written, such as "1920x1080". */
+  name: string;
   width: number;
   height: number;
   /** The CSS size of the map, which the pixel ratio scales up to the output size. */
@@ -44,6 +53,7 @@ export function parseSize(text: string): OutputSize {
   const height = Number(match[2]);
   const pixelRatio = Math.min(width, height) / SHORT_SIDE;
   return {
+    name: text,
     width,
     height,
     pixelRatio,
