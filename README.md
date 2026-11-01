@@ -213,11 +213,6 @@ and residential streets fade in from zoom 13.5 to 15.
 Every color is darker than the color for buildings of unknown age,
 and the layers have no labels.
 
-OpenStreetMap data is available under the
-[Open Database License](https://www.openstreetmap.org/copyright).
-A map that shows these layers must credit OpenStreetMap contributors;
-the page does not have this credit yet.
-
 ## 3) Run the site locally
 
 The site is an Astro project at the repository root,
@@ -296,3 +291,9 @@ except where the data's page or metadata states otherwise.
 The building footprints come from the City of Portland
 Bureau of Planning and Sustainability,
 and the page credits them.
+
+The water and street lines come from OpenStreetMap
+through a [Protomaps basemap build](https://docs.protomaps.com/basemaps/downloads).
+OpenStreetMap data is available under the
+[Open Database License](https://www.openstreetmap.org/copyright),
+and the page credits OpenStreetMap contributors.
