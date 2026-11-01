@@ -44,6 +44,12 @@ export async function nativeDecompress(
 
 const CACHE = new ResolvedValueCache(25, undefined, nativeDecompress);
 
+// The directory cache still decompresses archive indexes. Tile bodies stay
+// compressed so large overview tiles do not need expansion in the Worker.
+async function compressedTile(buf: ArrayBuffer, compression: Compression): Promise<ArrayBuffer> {
+  return compression === Compression.Gzip ? buf : nativeDecompress(buf, compression);
+}
+
 export class R2Source implements Source {
   env: TilesEnv;
   archiveName: string;
@@ -116,7 +122,7 @@ async function buildResponse(
     return text("Not found", 404);
   }
 
-  const p = new PMTiles(new R2Source(env, name), CACHE, nativeDecompress);
+  const p = new PMTiles(new R2Source(env, name), CACHE, tile ? compressedTile : nativeDecompress);
   let header;
   try {
     header = await p.getHeader();
@@ -169,7 +175,9 @@ async function buildResponse(
     // No tile at this position: an empty tile, which MapLibre draws as nothing.
     return new Response(null, { status: 204, headers });
   }
-  return new Response(tileData.data, { headers });
+  if (header.tileCompression === Compression.Gzip) headers.set("Content-Encoding", "gzip");
+  // The archive already encoded this body; automatic encoding would gzip it twice.
+  return new Response(tileData.data, { headers, encodeBody: "manual" });
 }
 
 /** Serves `/tiles/{name}.json` (TileJSON) and `/tiles/{name}/{z}/{x}/{y}.{ext}`. */
@@ -195,7 +203,13 @@ export async function handleTiles(
       console.error("Tile request failed", cacheUrl.pathname, error);
       return text("Tile request failed", 502, "no-store");
     }
-    ctx.waitUntil(cache.put(cacheKey, response.clone()));
+    // Clones and Cache API responses do not retain encodeBody. Specify it at
+    // both boundaries so a stored gzip body is not compressed a second time.
+    ctx.waitUntil(cache.put(cacheKey, new Response(response.clone().body, {
+      status: response.status,
+      headers: response.headers,
+      encodeBody: "manual",
+    })));
   }
 
   const etag = response.headers.get("ETag");
@@ -211,5 +225,9 @@ export async function handleTiles(
   if (request.method === "HEAD") {
     return new Response(null, response);
   }
-  return response;
+  return new Response(response.body, {
+    status: response.status,
+    headers: response.headers,
+    encodeBody: "manual",
+  });
 }

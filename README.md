@@ -129,27 +129,53 @@ pmtiles show data/portland_buildings.pmtiles
 pmtiles verify data/portland_buildings.pmtiles
 ```
 
-The build script runs this command:
+To use a saved input and a separate output path:
 
 ```bash
-tippecanoe \
-  -o data/portland_buildings.pmtiles \
-  -l buildings -n "Portland Building Ages" \
-  --projection=EPSG:4326 -Z10 -z16 \
-  --drop-densest-as-needed \
-  -y year_built -y age_bucket -y bldg_id \
-  -y bldg_use -y bldg_sqft -y num_story -y address -y neighborhood \
-  -P -f data/buildings_cleaned.ndjson
+bash scripts/build_tiles.sh data/regional-buildings.ndjson data/rebuilt.pmtiles
 ```
 
-`-Z10` starts at city-scale zoom, omitting coarse zooms where footprints are too small to read.
-`-z16` fixes the maximum zoom at 16; MapLibre can overzoom these tiles.
-`--drop-densest-as-needed` limits dense tile sizes by dropping features as needed.
-The source statistics include all retained footprints, even if tiling drops features.
-The command does not coalesce buildings, which could combine distinct addresses.
-Each `-y` flag retains a required property.
-`-P` reads newline-delimited features in parallel, and `-f` replaces a previous archive.
-The layer name remains `buildings`, as the map expects.
+The script builds zooms 10 through 13 at 14-bit coordinate precision
+and zooms 14 through 16 at 12-bit precision, then joins them with `tile-join`.
+MapLibre can overzoom the tiles beyond zoom 16.
+The extra precision at lower zooms keeps small footprints from collapsing.
+Both builds disable tiny-polygon reduction and the feature-count limit.
+They retain all eight properties on the `buildings` layer,
+so color, year filtering, selection, popups, and share links use each building's
+own properties at every zoom.
+Buildings are neither coalesced nor dropped to meet tile-size limits.
+Coordinate rounding and simplification can still remove very small geometry.
+
+The maximum compressed tile size is 10,000,000 bytes.
+Minimum coordinate precision is fixed, so an oversized tile fails the build
+instead of reducing precision or silently removing buildings.
+`tile-join` disables its separate 500 KB limit to keep these larger tiles.
+The script builds in a temporary directory next to the output
+and replaces the archive only after both builds and the join succeed.
+It refuses to replace an output symlink.
+Temporary archives are removed on exit.
+The Worker sends gzip-compressed tile bodies with `Content-Encoding: gzip`,
+so it does not expand large overview tiles before sending them to the browser.
+Archive metadata and directory indexes are still decompressed in the Worker.
+
+Inspect per-zoom tile sizes and feature records, and run the tile regression tests:
+
+```bash
+node scripts/inspect_tiles.ts data/portland_buildings.pmtiles > data/tile-metrics.json
+python3 scripts/test_build_tiles.py
+shellcheck scripts/build_tiles.sh
+```
+
+The inspection script uses the installed npm dependencies.
+It reports compressed tile sizes and decoded feature records across all tiles.
+These counts include copies at tile edges and in tile buffers;
+they are not unique source footprint counts.
+The tests require the tools from `brew bundle`.
+They build actual tiles and check that small footprints retain separate years
+and all popup properties at every zoom from 10 through 16.
+
+The [low-zoom comparison](docs/low-zoom-detail.md) records candidate measurements,
+browser results, and the tradeoff between transfer size and retained detail.
 
 The [refresh workflow](.github/workflows/refresh-buildings.yml) runs manually
 with `workflow_dispatch` and on the first day of each month at 10:17 UTC.
