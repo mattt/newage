@@ -1,8 +1,243 @@
 # Low-zoom building detail
 
-## Lean overview: shipping stopped at the mobile gate
+## Reduced overview: selected implementation
 
-The current candidate follows the November 1 shipping brief.
+Use 11-bit polygon geometry at zooms 10 through 12, with only `year_built`.
+Keep Tippecanoe's default tiny-polygon reduction and use `--coalesce --reorder`
+to group geometry with identical construction years.
+Keep the existing full-property, 12-bit tiles at zooms 13 through 16.
+The build fixes minimum detail and fails above 10 MB per compressed tile,
+rather than applying density dropping or reducing precision.
+The map style, year filter, selection boundary, orientation layers,
+and Worker gzip passthrough are unchanged in this round.
+
+This candidate looks closest to the lean build and meets both mobile targets
+with margin.
+It keeps the dense color field, street gaps, and large building shapes.
+Small footprints become area-weighted squares; their exact shapes and locations
+are approximate, and fewer polygon parts represent their combined area.
+The overview shows approximate footprint density.
+Grouping never combines geometry with different stored years.
+The filter and Play apply to those stored years, including the unknown value;
+they cannot restore tiny footprints removed by the overview approximation.
+Selection still starts at zoom 13, where full footprints and popup data remain.
+
+The 10-bit tiny-polygon version is faster but has larger, coarser squares.
+The ungrouped 11-bit version looks similar but exceeds the heap target.
+Precision reduction alone misses the loading target.
+Grouped centroids are near the target, but erase large building shapes and
+make residential areas too uniform at the radius needed for a solid color field.
+The raster is fast and keeps the broad color pattern,
+but it cannot follow the year filter or Play and looks soft at fractional zooms.
+It is only a benchmark.
+
+No push, pull request, remote upload, or deployment was made in this round.
+
+### Selected archive
+
+The final archive is `data/overview-buildings.pmtiles`, **121,216,257 bytes**.
+Its SHA-256 is `ab2d044ec6ae0a2d46c5d00c2c2da3cefcf71701df7b2fe3f37a1f199bea1f51`.
+The input remains the October 30 snapshot of 749,294 footprints.
+Tile comparison against the lean reference confirms identical compressed tile
+bodies at every addressed tile from zoom 13 through 16.
+The final overview tile bodies also match the measured `tiny-group11` candidate.
+
+Counts below are MVT records, including clipped pieces and buffer copies.
+At overview zooms, one record can contain many polygons with the same year;
+these counts do not measure buildings kept or lost.
+Sizes are stored gzip bytes across all nonempty addressed tiles.
+
+| Zoom | Feature records | Tiles | Median bytes | Largest bytes |
+| --- | ---: | ---: | ---: | ---: |
+| 10 | 1,382 | 17 | 7,866 | 287,747 |
+| 11 | 3,377 | 50 | 8,321 | 494,563 |
+| 12 | 8,686 | 140 | 7,857.5 | 285,756 |
+| 13 | 814,601 | 450 | 11,682 | 538,576 |
+| 14 | 823,305 | 1,532 | 3,890.5 | 182,224 |
+| 15 | 837,674 | 5,333 | 1,439 | 62,599 |
+| 16 | 866,567 | 17,488 | 688 | 19,826 |
+
+### Candidate builds and archive measurements
+
+All vector overviews carry only `year_built` at zooms 10 through 12.
+All candidates use the same full-property tiles from zoom 13 through 16.
+No candidate enables density dropping or the feature-count limit.
+`Shapes` disables tiny-polygon reduction; `Tiny` leaves it at the default.
+The named bit depth sets `--full-detail`, `--low-detail`, and `--minimum-detail`.
+`Grouped` adds `--coalesce --reorder`, which joins geometry with identical properties.
+This differs from `--coalesce-densest-as-needed`, which can mix properties.
+The fixed 14-bit default-tiny test barely changes the lean reference.
+Tiny-polygon handling becomes useful when coordinate precision is also lower.
+See the [Tippecanoe options](https://github.com/felt/tippecanoe#readme).
+
+Centroids use the existing footprint centroid function, one input point per building,
+12-bit coordinates, and `-r1` to disable point dropping.
+The grouped point build joins equal-year points into MultiPoint records.
+Decoded point totals are unchanged by grouping: 797,817 at zoom 10,
+800,663 at zoom 11, and 811,144 at zoom 12, including tile-buffer copies.
+Circles have radius 0.35 CSS pixels at zoom 10, 1.4 at zoom 12, and 2.8 at zoom 13,
+with exponential interpolation of base 2.
+Smaller circles were too dim; their trial artifacts are in `calibration/`.
+The raster uses transparent 512-pixel lossless WebP tiles at zooms 10 and 11,
+rendered from the lean footprints with the map palette.
+It uses the lean vector tiles at zoom 12.
+Its archive total is the sum of separate raster and vector archives.
+
+Each tile-size cell is **median / largest compressed bytes**.
+Zooms 13 through 16 share the sizes in the selected-archive table above.
+The raster sizes are WebP bytes rather than gzip MVT bytes.
+
+| Candidate / artifact prefix | Archive bytes | Zoom 10 | Zoom 11 | Zoom 12 |
+| --- | ---: | ---: | ---: | ---: |
+| Lean reference (`lean`) | 147,309,058 | 82,634 / 3,911,525 | 18,671 / 2,398,258 | 17,248.5 / 856,904 |
+| Tiny, 14 bit (`tiny14`) | 147,224,021 | 82,266.5 / 3,895,432 | 18,667 / 2,397,699 | 17,243.5 / 856,839 |
+| Tiny, 12 bit (`tiny12`) | 132,344,726 | 34,552 / 1,610,729 | 15,131 / 1,352,854 | 12,593.5 / 557,430 |
+| Shapes, 11 bit (`detail11`) | 129,509,665 | 38,599 / 1,792,650 | 9,555.5 / 1,230,387 | 10,121.5 / 446,072 |
+| Shapes, 10 bit (`detail10`) | 124,854,046 | 24,911.5 / 1,163,263 | 7,089.5 / 885,570 | 8,097.5 / 334,638 |
+| Tiny, 11 bit (`tiny11`) | 124,422,656 | 9,925 / 450,079 | 10,193 / 725,109 | 9,893.5 / 398,541 |
+| Tiny, 10 bit (`tiny10`) | 118,085,037 | 2,541 / 125,464 | 2,863 / 213,994 | 5,917 / 201,669 |
+| Shapes, 11 bit, grouped (`group11`) | 123,470,681 | 22,307 / 781,492 | 7,354.5 / 774,087 | 7,936 / 308,452 |
+| Tiny, 11 bit, grouped (`tiny-group11`) | 121,213,440 | 7,866 / 287,747 | 8,321 / 494,563 | 7,857.5 / 285,756 |
+| Centroids (`points`) | 123,114,653 | 28,463 / 1,400,823 | 5,732.5 / 816,301 | 5,172.5 / 273,042 |
+| Centroids, grouped (`points-coalesced`) | 117,727,323 | 13,604.5 / 604,640 | 3,194 / 374,488 | 3,200 / 131,904 |
+| Raster benchmark (`raster`) | 130,437,800 | 9,646.0 / 385,444 | 5,460.0 / 513,936 | 17,248.5 / 856,904 |
+
+Each vector candidate's decoded record counts are listed below.
+Grouping reduces records by collecting polygon or point parts; it does not by
+itself reduce the geometry count.
+Tiny-polygon reduction and coordinate quantization can reduce polygon parts.
+
+| Candidate | Zoom 10 records | Zoom 11 records | Zoom 12 records |
+| --- | ---: | ---: | ---: |
+| Lean reference | 798,196 | 801,793 | 814,038 |
+| Tiny, 14 bit | 791,422 | 801,425 | 813,906 |
+| Tiny, 12 bit | 585,651 | 749,377 | 805,659 |
+| Shapes, 11 bit | 744,263 | 786,417 | 807,038 |
+| Shapes, 10 bit | 582,538 | 721,047 | 761,051 |
+| Tiny, 11 bit | 199,323 | 586,418 | 758,117 |
+| Tiny, 10 bit | 55,990 | 200,094 | 583,129 |
+| Shapes, 11 bit, grouped | 1,570 | 3,485 | 8,696 |
+| Tiny, 11 bit, grouped | 1,382 | 3,377 | 8,686 |
+| Centroids | 797,817 | 800,663 | 811,144 |
+| Centroids, grouped | 1,572 | 3,483 | 8,684 |
+
+### Mobile comparison
+
+Headless Chromium used a 390 by 844 CSS-pixel viewport at DPR 3,
+4x CPU throttling, 150 ms latency, 1.6 Mbit/s download, and 750 Kbit/s upload.
+Each scenario had a fresh browser context with its cache disabled.
+All tests used longitude -122.676, latitude 45.523, on an Apple M4 Max
+with native ANGLE/Metal rendering.
+This is browser emulation, not a physical phone or mobile GPU test.
+One run was made for each candidate and scenario; heap samples vary with GC timing.
+
+A local Node server on port 8791 served the same built app and orientation archive,
+and passed stored gzip tile bodies through without recompression.
+Only the overview archive and the experimental point/raster layer changed.
+This measures client rendering and transfer cost, not deployed Worker CPU or R2 latency.
+The lean baseline was remeasured through this server.
+The final repository build was also checked through the same server.
+
+Initial loading starts before navigation and ends when both map sources are ready.
+The zoom interval includes a five-second linear animation from 13 to 10 and
+any remaining wait for tiles; its zoom-13 preload is excluded.
+Bytes include encoded responses, HTTP headers, and partial cancelled requests.
+MB means 1,000,000 bytes; MiB means 1,048,576 bytes.
+Heap is the peak sampled sum of the page and MapLibre worker, every 250 ms.
+Long tasks are main-page tasks over 50 ms and exclude MapLibre worker tasks.
+Every initial run had one long task; its total and maximum duration are equal.
+Every zoom run had zero long tasks.
+All runs finished loading without a tab crash or browser error.
+
+Each scenario cell is **MB transferred / seconds to ready / peak heap MiB**.
+The target is about 2 MB, 10 seconds, and less than 200 MiB in both scenarios.
+
+| Candidate | Initial zoom 10 | Zoom 13 to 10 | Initial long task, ms |
+| --- | ---: | ---: | ---: |
+| Lean reference | 8.831 / 47.07 / 625.8 | 9.105 / 46.62 / 305.4 | 77 |
+| Tiny, 14 bit | 8.754 / 46.69 / 677.4 | 9.030 / 46.24 / 336.2 | 78 |
+| Tiny, 12 bit | 3.925 / 22.04 / 410.8 | 4.199 / 21.90 / 324.3 | 88 |
+| Shapes, 11 bit | 4.131 / 23.22 / 266.7 | 4.405 / 23.00 / 257.3 | 83 |
+| Shapes, 10 bit | 2.863 / 16.70 / 375.7 | 3.138 / 16.60 / 326.2 | 77 |
+| Tiny, 11 bit | 1.400 / 8.85 / 270.4 | 1.676 / 9.08 / 161.5 | 77 |
+| Tiny, 10 bit | 0.695 / 5.15 / 36.4 | 0.966 / 5.48 / 52.2 | 77 |
+| Shapes, 11 bit, grouped | 2.120 / 12.53 / 208.9 | 2.394 / 12.70 / 182.8 | 79 |
+| Tiny, 11 bit, grouped | 1.063 / 7.03 / 76.2 | 1.337 / 7.35 / 37.7 | 78 |
+| Centroids | 3.260 / 18.40 / 508.6 | 3.533 / 18.48 / 212.8 | 82 |
+| Centroids, grouped | 1.648 / 9.94 / 154.4 | 1.920 / 10.26 / 40.7 | 81 |
+| Raster benchmark | 1.302 / 7.95 / 11.3 | 1.713 / 9.10 / 69.0 | 80 |
+| Final repository build | 1.063 / 7.05 / 66.5 | 1.335 / 7.35 / 69.1 | 78 |
+
+### Desktop frame timing and controls
+
+The desktop viewport was 1440 by 1000 at DPR 1, without throttling.
+A five-second linear zoom from 13 to 10 was followed until map idle.
+RAF intervals measure page scheduling; render intervals measure MapLibre draws
+and can include waits for data.
+The final wait after the camera stops is reported separately.
+These timings use the host GPU and do not predict a phone's frame rate.
+
+| Candidate | RAF p95 / max, ms | RAF intervals over 50 ms | Render p95 / max, ms | Final wait, ms |
+| --- | ---: | ---: | ---: | ---: |
+| Lean reference | 16.8 / 16.8 | 0 | 17.6 / 23.2 | 285.0 |
+| Tiny, 14 bit | 16.7 / 16.8 | 0 | 17.6 / 23.9 | 217.8 |
+| Tiny, 12 bit | 16.8 / 16.8 | 0 | 17.5 / 19.4 | 233.9 |
+| Shapes, 11 bit | 16.8 / 16.8 | 0 | 17.8 / 19.8 | 252.8 |
+| Shapes, 10 bit | 16.8 / 16.8 | 0 | 17.0 / 19.7 | 267.0 |
+| Tiny, 11 bit | 16.8 / 16.8 | 0 | 17.5 / 18.8 | 233.8 |
+| Tiny, 10 bit | 16.7 / 16.8 | 0 | 17.6 / 17.8 | 1.1 |
+| Shapes, 11 bit, grouped | 16.7 / 16.8 | 0 | 17.6 / 19.5 | 266.6 |
+| Tiny, 11 bit, grouped | 16.7 / 16.8 | 0 | 17.7 / 20.4 | 264.2 |
+| Centroids | 16.7 / 16.8 | 0 | 17.3 / 19.1 | 234.5 |
+| Centroids, grouped | 16.7 / 16.8 | 0 | 17.1 / 19.4 | 266.1 |
+| Raster benchmark | 16.8 / 83.3 | 1 | 17.6 / 100.4 | 265.5 |
+| Final repository build | 16.7 / 16.8 | 0 | 17.2 / 17.9 | 283.8 |
+
+At zoom 10, every vector candidate passed a known-year filter through 1900
+with unknown years excluded.
+Play advanced the year limit, and every rendered record stayed within that limit.
+Reset restored the unfiltered view for the selected and final builds.
+The raster does not support these controls at its overview zooms.
+The final build also passed the existing click, Enter, popup, and share-link
+browser checks across zooms 10 through 16, with shared selection opening at 17.
+
+The repository checks passed: `npm run check`, `npm test` (116 tests),
+`npm run build`, ShellCheck, PMTiles verification, and four tile regression tests.
+The tile tests check separate stored years and coverage after grouping,
+aggregate area for tiny footprints, full detail properties from zoom 13,
+and safe behavior for symlinks and failed builds.
+
+### Screenshots and raw evidence
+
+Artifacts are under `/tmp/ageofthecity-low-zoom/overview/`.
+`index.html` links to all 96 paired screenshots.
+Every candidate has desktop and mobile screenshots at zooms 10, 11, 11.9, and 12:
+`<prefix>-<desktop|mobile>-z<zoom>.png`.
+Each corresponding `*-pair.png` places the lean reference on the left and
+the candidate on the right, with a label above both images.
+For example, `tiny-group11-mobile-z10-pair.png` and
+`tiny-group11-desktop-z11.9-pair.png` show the selected candidate.
+The `lean-*` screenshots are the reference with the current orientation layers.
+The original requested references are also saved as `reference-mobile-z10.png`
+and `reference-desktop-z11.9.png`.
+
+`<prefix>-mobile.json` contains both mobile scenarios, exact byte totals,
+heap samples' maxima, long tasks, and errors.
+`<prefix>-desktop.json` contains frame statistics and filter/Play checks.
+`<prefix>-tiles.json` contains vector archive sizes, counts, and metadata;
+`raster-summary.json` contains the raster comparison sizes.
+`implemented-tile-comparison.json` records the tile-body comparisons by zoom.
+`point-counts.json` records point geometry counts before and after grouping.
+`implemented-interactions.json` records the final selection checks.
+The final build's screenshots and measurements use the `implemented` prefix.
+
+The temporary server and data scripts are in this artifact directory.
+Browser harnesses are `browser/overview_mobile.mjs`, `browser/overview_desktop.mjs`,
+and `browser/implemented_interactions.mjs` under `/tmp/ageofthecity-low-zoom/`.
+
+## Earlier lean overview: shipping stopped at the mobile gate
+
+This earlier candidate followed the November 1 shipping brief.
 Zooms 10 through 12 contain only `year_built` at 14-bit coordinate precision.
 Zooms 13 through 16 keep all eight properties at 12-bit precision.
 Both ranges disable density dropping and tiny-polygon reduction.

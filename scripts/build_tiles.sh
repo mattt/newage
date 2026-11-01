@@ -17,18 +17,21 @@ trap 'rm -rf "$work_dir"' EXIT
 common=(
   -l buildings -n "Portland Building Ages"
   --projection=EPSG:4326
-  --no-tiny-polygon-reduction --no-feature-limit
+  --no-feature-limit
   --maximum-tile-bytes=10000000
   --no-progress-indicator
   -P
 )
 
-# Extra coordinate precision keeps small buildings from collapsing at city scale.
-# Fix minimum detail too, so the tile-size limit cannot reduce that precision.
+# Approximate sub-pixel footprints with area-weighted squares. Coalesce only
+# identical years, so the filter and Play retain a separate value for each year.
+# Grouping geometry avoids a separate feature object for every tiny footprint.
 tippecanoe "${common[@]}" -Z10 -z12 -y year_built \
-  --full-detail=14 --low-detail=14 --minimum-detail=14 \
+  --full-detail=11 --low-detail=11 --minimum-detail=11 \
+  --coalesce --reorder \
   -o "$work_dir/overview.pmtiles" "$input"
 tippecanoe "${common[@]}" -Z13 -z16 \
+  --no-tiny-polygon-reduction \
   --full-detail=12 --low-detail=12 --minimum-detail=12 \
   -y year_built -y age_bucket -y bldg_id \
   -y bldg_use -y bldg_sqft -y num_story -y address -y neighborhood \

@@ -107,9 +107,12 @@ pmtiles show data/portland_buildings.pmtiles
 pmtiles verify data/portland_buildings.pmtiles
 ```
 
-Zooms 10 through 12 keep only `year_built`, with 14-bit coordinates.
+Zooms 10 through 12 keep only `year_built`, with 11-bit coordinates.
+Tippecanoe approximates tiny footprints with area-weighted squares
+and groups geometry with the same year to reduce browser memory use.
 Zooms 13 through 16 keep all popup properties, with 12-bit coordinates.
-Both ranges disable density dropping and tiny-polygon reduction.
+Both ranges disable density dropping;
+detail zooms also disable tiny-polygon reduction.
 A fixed 10 MB compressed tile limit fails the build instead of reducing precision.
 `tile-join` combines the ranges into one `buildings` layer.
 The Worker preserves gzip compression through its tile cache.
@@ -128,7 +131,8 @@ python3 scripts/test_build_tiles.py
 
 See the [low-zoom measurements](docs/low-zoom-detail.md) for archive sizes,
 feature-record counts, and the throttled mobile comparison.
-The lean candidate exceeded the 20-second mobile load budget and is not published.
+The reduced overview meets the mobile load and heap targets in Chromium emulation.
+It is not published.
 
 The [refresh workflow](.github/workflows/refresh-buildings.yml) runs manually
 with `workflow_dispatch` and from the default branch monthly on day 1 at 10:17 UTC.
@@ -241,7 +245,7 @@ curl -I https://www.ageofthe.city/
 
 ## Costs
 
-The production buildings archive is about 116 MB; the lean candidate is 147 MB.
+The production buildings archive is about 116 MB; the reduced overview archive is 121 MB.
 Orientation adds 8.7 MB.
 [R2 Standard](https://developers.cloudflare.com/r2/pricing/) includes free monthly allowances
 of 10 GB-month, 1 million Class A operations, and 10 million Class B operations.
