@@ -9,9 +9,8 @@ and rendered with MapLibre GL JS.
 
 ## Data sources
 
-The rebuild uses these City of Portland ArcGIS Open Data layers.
-The script queries their live metadata for pagination support and page size,
-then downloads GeoJSON ordered by object ID.
+The City of Portland [Open Data portal](https://gis-pdx.opendata.arcgis.com/)
+provides these ArcGIS layers:
 
 | Dataset | Exact service URL | Fields used |
 | --- | --- | --- |
@@ -19,30 +18,13 @@ then downloads GeoJSON ordered by object ID.
 | Active Address Points | https://www.portlandmaps.com/od/rest/services/COP_OpenData_Property/MapServer/1272 | `ADDRESS_FULL`, address components, `IS_MAIN_ADDRESS`, `OBJECTID` |
 | Neighborhood Boundaries | https://www.portlandmaps.com/od/rest/services/COP_OpenData_Boundary/MapServer/3 | `NAME` |
 
-The [Open Data portal](https://gis-pdx.opendata.arcgis.com/)
-provides the source catalog.
-All three layers are downloaded in full with `where=1=1` and no spatial filter.
-Every page uses `orderByFields=OBJECTID` (or the layer's declared object ID field).
-Before processing, the script checks both feature count and unique object ID count
-against `returnCountOnly` queries made before and after each download.
-A mismatch stops the run before the downloaded file replaces the previous input.
-The map keeps the complete regional footprint layer, including neighboring cities.
-It does not clip buildings to the Portland city boundary.
-Address and neighborhood joins add information without removing unmatched buildings.
+## Setup
 
-## Workflow overview
-
-1. Install tools with `brew bundle` and site dependencies with `npm ci`.
-2. Download and process the three datasets with `uv`.
-3. Build PMTiles at maximum zoom 16 with Tippecanoe.
-4. Inspect the archive before uploading it to R2.
-
-The Brewfile installs `uv`, `tippecanoe`, and the `pmtiles` CLI.
-The Python scripts use self-contained PEP 723 dependency metadata.
-GIS workflows select Python 3.12, which has wheels for the pinned GIS libraries.
-The scripts accept Python 3.11 through 3.13; Python 3.14 is excluded because
-`pyogrio` 0.11.1 does not provide a wheel for it.
-Downloaded inputs and generated tiles stay in the ignored `data/` directory.
+Run `brew bundle` for `uv`, `tippecanoe`, and the `pmtiles` CLI,
+and `npm ci` for site dependencies.
+Python scripts declare dependencies with PEP 723 metadata and accept Python 3.11–3.13.
+GIS workflows use 3.12; Python 3.14 lacks a wheel for pinned `pyogrio` 0.11.1.
+Inputs and tiles stay in the ignored `data/` directory.
 
 ## 1) Download and process buildings
 
@@ -52,11 +34,15 @@ uv run scripts/process_buildings.py
 
 This writes `data/inputs/{buildings,neighborhoods,addresses}.geojson`,
 `data/buildings_cleaned.ndjson`, and `src/data/building-stats.json`.
-Each run downloads fresh inputs unless a local override is supplied.
-The script retries failed requests and rejects incomplete pages or duplicate object IDs.
-It prints the service counts, downloaded counts, and unique object ID counts for each layer.
-ArcGIS does not provide a transaction across layers; retain the downloaded files
-when you need to reproduce the same input snapshot.
+Each run downloads fresh inputs unless overridden locally.
+The script reads live pagination metadata and downloads all layers with `where=1=1`,
+no spatial filter, and `orderByFields=OBJECTID` (or the declared object ID field).
+It retries failed requests and rejects incomplete pages and duplicate IDs.
+Before replacing an input, it checks feature and unique ID counts against
+`returnCountOnly` queries before and after download, and prints all counts.
+ArcGIS has no transaction across layers; retain inputs to reproduce a snapshot.
+The complete regional footprint layer includes neighboring cities.
+Address and neighborhood joins retain unmatched buildings.
 
 Reuse all three saved inputs without network requests:
 
@@ -70,29 +56,24 @@ uv run scripts/process_buildings.py \
   --stats-output src/data/building-stats.json
 ```
 
-Each override also accepts another GeoPandas-readable dataset with the same fields
-and a declared CRS.
+Overrides accept any GeoPandas-readable dataset with matching fields and a declared CRS.
 `--input` is an alias for `--buildings`.
 `--download-dir` changes the download directory.
 The validation year defaults to the current calendar year.
 
-Geometry repair and all spatial joins use UTM zone 10N (`EPSG:32610`), in metres.
-Empty geometries are dropped.
-Footprints and boundaries must remain polygons after repair; addresses must remain points.
-The script reports these losses, final bounds in WGS84,
-and address and neighborhood coverage.
-It does not simplify footprint geometry before tiling.
+Geometry repair and spatial joins use UTM zone 10N (`EPSG:32610`), in metres.
+The script drops empty geometries, non-polygon footprints and boundaries,
+and non-point addresses after repair.
+It reports losses, WGS84 bounds, and join coverage, without simplifying footprints.
 
-The neighborhood is the polygon that contains the footprint centroid.
-Where neighborhood polygons overlap, the first name in alphabetical order wins.
+Neighborhoods contain footprint centroids; alphabetical order breaks overlap ties.
 The address comes from a point covered by the footprint, including its boundary.
 If none is available, the nearest point within 30 metres of the footprint is used.
-For multiple contained points or equal-distance matches, main addresses take
-precedence, followed by the lowest object ID.
-Points without a usable address are excluded before the joins.
-`ADDRESS_FULL` supplies a single-line street address, including a unit when present.
-If it is empty, the script combines the number, street name, and unit fields.
-Nearby addresses can belong to another building; this fallback is an approximation.
+Main addresses, then lowest object IDs, break containment or equal-distance ties.
+Points without usable addresses are excluded.
+Addresses use `ADDRESS_FULL`, including units,
+or fall back to number, street name, and unit fields.
+Nearest addresses can belong to another building.
 
 | Tile property | Convention |
 | --- | --- |
@@ -103,17 +84,14 @@ Nearby addresses can belong to another building; this fallback is an approximati
 | `bldg_sqft`, `num_story` | Positive finite numbers; missing, zero, negative, and invalid values become `-1`. Fractions are retained. |
 | `address`, `neighborhood` | Strings; omitted when unknown. |
 
-Statistics are computed from the final retained footprints, before tiling.
-The JSON keeps `source`, `total`, `unknown`, `earliestYear`, `latestYear`, and `byDecade`,
+Statistics describe retained footprints before tiling.
+The JSON contains `source`, `total`, `unknown`, `earliestYear`, `latestYear`, and `byDecade`,
 and records `bounds` as `[west, south, east, north]` in WGS84.
 The map pan limits, OG card validation, and Dataset metadata use these bounds.
-Neighborhood coverage is limited to Portland neighborhood polygons;
-regional buildings outside them remain in the data without a neighborhood value.
-The year limits are `null` when no known years remain.
-Counts describe footprints, not deduplicated building IDs.
-The source `BLDG_ID` values are not unique across the region.
-The pipeline preserves these labels and all footprints; selecting a repeated label
-can highlight more than one footprint.
+Buildings outside Portland neighborhoods have no neighborhood value.
+Year limits are `null` when no known years remain.
+Counts are not deduplicated by `BLDG_ID`: these labels can repeat,
+and selecting one can highlight multiple footprints.
 
 Run the focused Python tests:
 
@@ -129,76 +107,79 @@ pmtiles show data/portland_buildings.pmtiles
 pmtiles verify data/portland_buildings.pmtiles
 ```
 
-To use a saved input and a separate output path:
+The build script runs this command:
 
 ```bash
-bash scripts/build_tiles.sh data/regional-buildings.ndjson data/rebuilt.pmtiles
+tippecanoe \
+  -o data/portland_buildings.pmtiles \
+  -l buildings -n "Portland Building Ages" \
+  --projection=EPSG:4326 -Z10 -z16 \
+  --drop-densest-as-needed \
+  -y year_built -y age_bucket -y bldg_id \
+  -y bldg_use -y bldg_sqft -y num_story -y address -y neighborhood \
+  -P -f data/buildings_cleaned.ndjson
 ```
 
-The script builds zooms 10 through 13 at 14-bit coordinate precision
-and zooms 14 through 16 at 12-bit precision, then joins them with `tile-join`.
-MapLibre can overzoom the tiles beyond zoom 16.
-The extra precision at lower zooms keeps small footprints from collapsing.
-Both builds disable tiny-polygon reduction and the feature-count limit.
-They retain all eight properties on the `buildings` layer,
-so color, year filtering, selection, popups, and share links use each building's
-own properties at every zoom.
-Buildings are neither coalesced nor dropped to meet tile-size limits.
-Coordinate rounding and simplification can still remove very small geometry.
-
-The maximum compressed tile size is 10,000,000 bytes.
-Minimum coordinate precision is fixed, so an oversized tile fails the build
-instead of reducing precision or silently removing buildings.
-`tile-join` disables its separate 500 KB limit to keep these larger tiles.
-The script builds in a temporary directory next to the output
-and replaces the archive only after both builds and the join succeed.
-It refuses to replace an output symlink.
-Temporary archives are removed on exit.
-The Worker sends gzip-compressed tile bodies with `Content-Encoding: gzip`,
-so it does not expand large overview tiles before sending them to the browser.
-Archive metadata and directory indexes are still decompressed in the Worker.
-
-Inspect per-zoom tile sizes and feature records, and run the tile regression tests:
-
-```bash
-node scripts/inspect_tiles.ts data/portland_buildings.pmtiles > data/tile-metrics.json
-python3 scripts/test_build_tiles.py
-shellcheck scripts/build_tiles.sh
-```
-
-The inspection script uses the installed npm dependencies.
-It reports compressed tile sizes and decoded feature records across all tiles.
-These counts include copies at tile edges and in tile buffers;
-they are not unique source footprint counts.
-The tests require the tools from `brew bundle`.
-They build actual tiles and check that small footprints retain separate years
-and all popup properties at every zoom from 10 through 16.
-
-The [low-zoom comparison](docs/low-zoom-detail.md) records candidate measurements,
-browser results, and the tradeoff between transfer size and retained detail.
+Tiles start at city-scale zoom 10; MapLibre overzooms above 16.
+Dense tiles can drop features; statistics still include all retained footprints.
+Buildings are not coalesced, preserving distinct addresses.
+The map requires the `buildings` layer and all listed properties.
+`-P` reads features in parallel; `-f` replaces the archive.
 
 The [refresh workflow](.github/workflows/refresh-buildings.yml) runs manually
-with `workflow_dispatch` and on the first day of each month at 10:17 UTC.
-GitHub runs scheduled workflows from the default branch once the workflow is merged there.
-It uses a macOS runner and `brew bundle`, tests the transformations,
-rebuilds the data and statistics, and builds and verifies the archive.
-The workflow stores the PMTiles archive, regenerated statistics JSON,
-`pmtiles show` output, and SHA-256 hashes as an artifact for 30 days.
-It uses no Cloudflare credentials and never uploads or deploys.
+with `workflow_dispatch` and from the default branch monthly on day 1 at 10:17 UTC.
+It uses macOS and `brew bundle` to test transformations, rebuild data and statistics,
+and build and verify the archive.
+Artifacts retain PMTiles, statistics JSON, `pmtiles show` output, and SHA-256 hashes
+for 30 days.
+The workflow has no Cloudflare credentials and never publishes.
 
-Download the artifact from the completed workflow run.
-Inspect the archive metadata and verify its hashes before publication.
-Open a pull request that updates `src/data/building-stats.json` from the artifact.
-Uploading the archive to R2 is a separate approved operation;
-coordinate it with deployment of the site containing the matching statistics.
-Keep the previous archive available for rollback.
+Before publication, download the artifact, inspect metadata, and verify hashes.
+Update `src/data/building-stats.json` through a pull request.
+R2 upload requires separate approval; coordinate it with deployment of matching statistics.
+Keep the previous archive for rollback.
+
+## Orientation layers
+
+Water and roads use `data/orientation.pmtiles`, cropped from a daily
+[Protomaps basemap build](https://docs.protomaps.com/basemaps/downloads)
+of OpenStreetMap data.
+Rebuild it manually; the monthly workflow excludes it:
+
+```bash
+bash scripts/build_orientation.sh            # newest build
+bash scripts/build_orientation.sh 20261101   # a specific build, for a repeatable archive
+```
+
+The script extracts zooms 0 through 14 for the bounds in `src/data/building-stats.json`,
+then uses `tile-join` to keep zooms 10 through 14,
+the `water` and `roads` layers, and the properties the style reads.
+Roads keep highways, major roads, and residential streets,
+without paths, rail, service roads, or driveways.
+Water keeps rivers, lakes, sloughs, and canals, without pools and fountains.
+The archive is about 9 MB; MapLibre overzooms it above zoom 14.
+
+The Worker serves archives by name, including `/tiles/orientation.json`.
+Upload locally for development or remotely for deployment:
+
+```bash
+npx wrangler r2 object put ageofthe-city/orientation.pmtiles \
+  --file=data/orientation.pmtiles --local
+npx wrangler r2 object put ageofthe-city/orientation.pmtiles \
+  --file=data/orientation.pmtiles --remote
+```
+
+Upload the archive to the remote bucket before you deploy
+the first version of the site that reads `orientation.pmtiles`.
+
+The style in `src/lib/orientation.ts` adds shorelines at zoom 12
+and fades residential streets in from zoom 13.5 to 15.
+Water and roads have no labels and are darker than unknown-age buildings.
 
 ## 3) Run the site locally
 
-The site is an Astro project at the repository root,
-with its pages in `src/` and the Cloudflare Worker in `worker/`.
-The Worker serves the Astro build in `dist/` as static assets
-and the tiles from a PMTiles archive in R2, at the same origin:
+Astro pages live in `src/`; the Cloudflare Worker lives in `worker/`.
+The Worker serves `dist/` assets and R2 tiles at the same origin:
 
 - `/tiles/portland_buildings.json` returns TileJSON.
   Its tile URLs carry the archive's ETag as `?v=`,
@@ -208,18 +189,15 @@ and the tiles from a PMTiles archive in R2, at the same origin:
   a position with no buildings returns `204 No Content`.
 - `www.ageofthe.city` redirects to `ageofthe.city` with a 308.
 
-The build step (`npm run build`, which Wrangler runs before `dev` and `deploy`)
-builds the Astro site into `dist/`.
-Astro also checks that every internal link uses the site's one URL form,
-with a trailing slash.
-The build requires Node.js 22.23.4 or later.
+Wrangler runs `npm run build` before `dev` and `deploy` to build `dist/`
+and check internal links for trailing slashes.
+Node.js 22.23.4 or later is required.
 `npm run check` type-checks the site and the Worker,
 and `npm test` runs their unit tests.
 
 Upload the tileset to local R2 and start the development server:
 
 ```bash
-npm install
 npx wrangler r2 object put ageofthe-city/portland_buildings.pmtiles \
   --file=data/portland_buildings.pmtiles --local
 npm run dev
@@ -237,7 +215,6 @@ If your Wrangler login has access to more than one account,
 set `CLOUDFLARE_ACCOUNT_ID` first.
 
 ```bash
-npm install
 npx wrangler r2 bucket create ageofthe-city
 npx wrangler r2 object put ageofthe-city/portland_buildings.pmtiles \
   --file=data/portland_buildings.pmtiles --remote
@@ -258,9 +235,12 @@ curl -I https://www.ageofthe.city/
 
 ## Costs
 
-- R2 storage: $0.015/GB/month
-- Worker requests: free tier includes 100K requests/day
-- A typical 100GB tileset runs around $3-5/month, depending on usage
+Archives total about 125 MB: buildings 116 MB, orientation 8.7 MB.
+[R2 Standard](https://developers.cloudflare.com/r2/pricing/) includes free monthly allowances
+of 10 GB-month, 1 million Class A operations, and 10 million Class B operations.
+Overages cost $0.015/GB-month, $4.50/million A, and $0.36/million B.
+R2 has no egress fees.
+[Workers Free](https://developers.cloudflare.com/workers/platform/pricing/) allows 100,000 requests/day.
 
 ## License and attribution
 
@@ -271,3 +251,9 @@ except where the data's page or metadata states otherwise.
 The building footprints come from the City of Portland
 Bureau of Planning and Sustainability,
 and the page credits them.
+
+The water and street lines come from OpenStreetMap
+through a [Protomaps basemap build](https://docs.protomaps.com/basemaps/downloads).
+OpenStreetMap data is available under the
+[Open Database License](https://www.openstreetmap.org/copyright),
+and the page credits OpenStreetMap contributors.
