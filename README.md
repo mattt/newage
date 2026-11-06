@@ -297,6 +297,13 @@ and `--reuse-frames` keeps earlier frames so that only the sound changes:
 npm run video:render -- --size 1920x1080 --reuse-frames --instrument harp
 ```
 
+To put an outside soundtrack under a finished video,
+normalized the same way and never time-stretched:
+
+```bash
+node scripts/video/mux.ts VIDEO.mp4 AUDIO.wav OUTPUT.mp4
+```
+
 ### Whole-city shot
 
 `scripts/video/region.json` frames the whole region.
@@ -309,13 +316,18 @@ At this scale most buildings are smaller than a pixel,
 and the zooms fall below the archive's lowest zoom, 10.
 `--supersample 4` draws the map at four times the output size, four times closer,
 so that it loads finer tiles, and scales each frame down with a Lanczos filter.
+The scaling averages in linear light, because in sRGB values
+a sub-pixel building averaged with black comes out too dark;
+`--downscale srgb` restores the old average.
+`--lift 1.2` then multiplies the levels by 1.2, around the background value,
+which restores what WebGL's own antialiasing loses before the downscale.
 Thousands of buildings arrive each year, so `--busiest auto` scales the notes
 to the busiest year in view, instead of playing every year at the note cap:
 
 ```bash
 npm run video:render -- --places scripts/video/region.json \
   --size 1920x1080 --size 1080x1920 --years-per-second 6 --hold 4 \
-  --supersample 4 --busiest auto --instrument harp \
+  --supersample 4 --lift 1.2 --busiest auto --instrument harp \
   --buildings-tiles data/production-buildings.pmtiles
 ```
 

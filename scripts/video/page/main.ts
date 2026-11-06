@@ -99,6 +99,8 @@ interface FrameState {
   name: string | null;
   /** The label's size relative to a frame whose short side is 540 CSS pixels. */
   labelScale: number;
+  /** Dims the label to offset a level lift after capture, so that it keeps its color. */
+  labelOpacity: number;
 }
 
 let current = "";
@@ -119,6 +121,7 @@ async function show(state: FrameState): Promise<string[]> {
   map.setFilter(OUTLINE, filter);
   label.hidden = state.name === null;
   label.style.setProperty("--label-scale", String(state.labelScale));
+  label.style.opacity = String(state.labelOpacity);
   labelName.textContent = state.name ?? "";
   labelYear.textContent = String(state.year);
   await settled();

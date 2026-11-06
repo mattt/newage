@@ -13,6 +13,7 @@ import sharp from "sharp";
 import { render as renderAudio, notes, SAMPLE_RATE, velocity, writeWav, type Note, type NoteEvent } from "./audio.ts";
 import { loadBuildings } from "./buildings.ts";
 import { projector } from "./frame.ts";
+import { normalize, run } from "./loudness.ts";
 import { writeMidi, type Section } from "./midi.ts";
 import {
   cameraFor,
@@ -46,6 +47,9 @@ const HELP = `Usage: node scripts/video/render.ts [options]
   --reuse-frames          keep frames rendered by an earlier run, to change only the sound
   --supersample N         draw the map at N times the output size and scale it down,
                           at a zoom N times closer, so the map loads finer tiles
+  --downscale linear|srgb how supersampled frames average their pixels (default linear)
+  --lift N                multiply the levels of supersampled frames by N after the
+                          downscale, keeping the background where it is (default 1)
   --busiest N|auto        let note count and level keep rising with density up to
                           N buildings in one year, or the busiest year in view (auto),
                           instead of reaching the note cap at a few buildings
@@ -71,6 +75,8 @@ const { values: options } = parseArgs({
     samples: { type: "string" },
     "reuse-frames": { type: "boolean", default: false },
     supersample: { type: "string", default: "0" },
+    downscale: { type: "string", default: "linear" },
+    lift: { type: "string", default: "1" },
     busiest: { type: "string" },
     stills: { type: "boolean", default: false },
     "buildings-tiles": { type: "string", default: "data/regional-buildings.pmtiles" },
@@ -88,15 +94,15 @@ const FPS = positive("fps");
 const YEARS_PER_SECOND = positive("years-per-second");
 const HOLD = Number(options.hold);
 const FADE = Number(options.fade);
-const LOUDNESS = -16;
-/** The limiter ceiling: about -2 dBFS, which leaves room for AAC overshoot. */
-const LIMIT = 0.79;
 const INSTRUMENT = options.instrument;
 /** Outputs with another instrument than the default get its name, so they do not replace each other. */
 const SUFFIX = INSTRUMENT === "pluck" ? "" : `-${INSTRUMENT}`;
 const instrument = await loadInstrument(INSTRUMENT, options.samples);
 const SUPERSAMPLE = Number(options.supersample);
 if (!(SUPERSAMPLE >= 0)) throw new Error("--supersample must be 0 or more");
+if (!["linear", "srgb"].includes(options.downscale)) throw new Error("--downscale must be linear or srgb");
+const LIFT = Number(options.lift);
+if (!(LIFT > 0)) throw new Error("--lift must be a positive number");
 const BUSIEST = options.busiest === undefined ? undefined : options.busiest === "auto" ? "auto" : Number(options.busiest);
 if (typeof BUSIEST === "number" && !(BUSIEST > 0)) throw new Error("--busiest must be a positive number or auto");
 
@@ -105,6 +111,9 @@ function positive(name: "fps" | "years-per-second"): number {
   if (!(value > 0)) throw new Error(`--${name} must be a positive number`);
   return value;
 }
+
+/** The red and green of the map's background, #050506, which a level lift leaves in place. */
+const BACKGROUND_LEVEL = 5;
 
 /** What the page draws for one frame. */
 interface FrameState {
@@ -116,6 +125,8 @@ interface FrameState {
   name: string | null;
   /** The label's size relative to a frame whose short side is 540 CSS pixels. */
   labelScale: number;
+  /** Dims the label to offset a later level lift, so that it keeps its color. */
+  labelOpacity: number;
 }
 
 /** How the page draws frames for an output size. */
@@ -227,6 +238,27 @@ async function show(page: Page, state: FrameState): Promise<Buffer> {
   return page.screenshot({ type: "png", animations: "disabled", caret: "hide" });
 }
 
+/** Captures a frame at the output size. */
+async function captureFrame(page: Page, place: Place, size: OutputSize, year: number): Promise<Buffer> {
+  const frame = await show(page, frameState(place, size, year));
+  return captureFor(size).downscale ? shrink(frame, size) : frame;
+}
+
+/**
+ * Scales a supersampled frame down. Most buildings at city scale are smaller
+ * than an output pixel, so each output pixel averages a building with the black
+ * around it. In linear light that average matches the light the building gives
+ * off; in sRGB values, it comes out darker, which mutes the colors.
+ */
+async function shrink(frame: Buffer, size: OutputSize): Promise<Buffer> {
+  const image = sharp(frame);
+  if (options.downscale === "linear") image.pipelineColourspace("scrgb").toColourspace("srgb");
+  const small = await image.resize(size.width, size.height, { kernel: "lanczos3" }).removeAlpha().png().toBuffer();
+  if (LIFT === 1) return small;
+  // A separate step, so that the gain applies to sRGB values, around the background.
+  return sharp(small).linear(LIFT, -(LIFT - 1) * BACKGROUND_LEVEL).png().toBuffer();
+}
+
 function frameState(place: Place, size: OutputSize, year: number): FrameState {
   const camera = cameraFor(place, size);
   const capture = captureFor(size);
@@ -238,6 +270,7 @@ function frameState(place: Place, size: OutputSize, year: number): FrameState {
     includeUnknown: !options["no-unknown"],
     name: options["no-labels"] ? null : place.name,
     labelScale: 2 ** capture.zoomOffset,
+    labelOpacity: capture.downscale ? 1 / LIFT : 1,
   };
 }
 
@@ -249,11 +282,7 @@ async function renderStills(page: Page, size: OutputSize, directory: string) {
   const files: string[] = [];
   for (const place of places) {
     const file = join(stills, `${place.id}.png`);
-    let still = await show(page, frameState(place, size, bounds.latest));
-    if (captureFor(size).downscale) {
-      still = await sharp(still).resize(size.width, size.height, { kernel: "lanczos3" }).png().toBuffer();
-    }
-    await writeFile(file, still);
+    await writeFile(file, await captureFrame(page, place, size, bounds.latest));
     files.push(file);
     console.log(file);
   }
@@ -360,13 +389,10 @@ async function renderVideo(page: Page, size: OutputSize, directory: string) {
 
 /** Captures each distinct frame once, and repeats it while the year holds. */
 async function renderFrames(page: Page, clip: Clip, size: OutputSize, output: string) {
-  const scale = captureFor(size).downscale
-    ? ["-vf", `scale=${size.width}:${size.height}:flags=lanczos+accurate_rnd+full_chroma_int`]
-    : [];
   const ffmpeg = spawn(
     "ffmpeg",
     ["-hide_banner", "-loglevel", "error", "-y", "-f", "image2pipe", "-framerate", String(FPS),
-      "-c:v", "png", "-i", "-", ...scale, "-c:v", "libx264rgb", "-crf", "0", "-preset", "ultrafast", output],
+      "-c:v", "png", "-i", "-", "-c:v", "libx264rgb", "-crf", "0", "-preset", "ultrafast", output],
     { stdio: ["pipe", "inherit", "inherit"] },
   );
   const done = exited(ffmpeg, "ffmpeg");
@@ -374,7 +400,7 @@ async function renderFrames(page: Page, clip: Clip, size: OutputSize, output: st
   let frame: Buffer | undefined;
   for (const [f, year] of clip.years.entries()) {
     if (year !== previousYear) {
-      frame = await show(page, frameState(clip.place, size, year));
+      frame = await captureFrame(page, clip.place, size, year);
       previousYear = year;
     }
     if (!ffmpeg.stdin.write(frame)) await new Promise((resolve) => ffmpeg.stdin.once("drain", resolve));
@@ -478,48 +504,6 @@ async function exists(file: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-/**
- * Brings the soundtrack to the target integrated loudness: a gain, then a
- * limiter for the peaks, measured again and corrected until it lands.
- */
-async function normalize(input: string, output: string) {
-  let gain = 0;
-  let measured = await loudness(input, "anull");
-  for (let attempt = 0; attempt < 4 && Number.isFinite(measured); attempt++) {
-    gain += LOUDNESS - measured;
-    const chain = `volume=${gain.toFixed(2)}dB,alimiter=limit=${LIMIT}:attack=4:release=60:level=false`;
-    measured = await loudness(input, chain);
-    if (Math.abs(measured - LOUDNESS) < 0.2) {
-      await run("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y", "-i", input, "-af", chain,
-        "-c:a", "pcm_f32le", output]);
-      console.log(`${output}: ${measured.toFixed(1)} LUFS after ${gain.toFixed(1)} dB of gain`);
-      return;
-    }
-  }
-  throw new Error(`Could not bring ${input} to ${LOUDNESS} LUFS (measured ${measured})`);
-}
-
-/** Integrated loudness in LUFS after a filter chain, from ffmpeg's ebur128 filter. */
-async function loudness(input: string, chain: string): Promise<number> {
-  const log = await run("ffmpeg", ["-hide_banner", "-nostats", "-i", input, "-af", `${chain},ebur128`,
-    "-f", "null", "-"]);
-  const match = /Integrated loudness:\s+I:\s+(-?[\d.]+) LUFS/.exec(log);
-  return match ? Number(match[1]) : NaN;
-}
-
-function run(command: string, args: string[]): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
-    let log = "";
-    child.stdout.on("data", (chunk) => (log += chunk));
-    child.stderr.on("data", (chunk) => (log += chunk));
-    child.on("error", reject);
-    child.on("close", (code) =>
-      code === 0 ? resolve(log) : reject(new Error(`${command} exited with ${code}:\n${log.slice(-2000)}`)),
-    );
-  });
 }
 
 function exited(child: ReturnType<typeof spawn>, name: string): Promise<void> {

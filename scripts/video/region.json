@@ -1,7 +1,7 @@
 [
   {
     "id": "region",
-    "name": "Portland",
+    "name": "Portland Metro Region",
     "center": [-122.6964, 45.4262],
     "zoom": 9.544,
     "start": 1880,
