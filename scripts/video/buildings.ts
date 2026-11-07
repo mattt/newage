@@ -1,15 +1,20 @@
 // Reads building points for the launch video: one centroid per footprint with
 // its year built and floor area, from data/regional-buildings.ndjson.
 //
-// The first read streams the NDJSON (about 450 MB) and caches the points in
-// data/video/buildings.bin, which later reads load in well under a second.
+// The first read streams the NDJSON (about 450 MB) and caches the points, which
+// later reads load in well under a second: in data/video/buildings.bin for the
+// default NDJSON, and beside any other NDJSON, so that each source keeps its own.
 import { createReadStream } from "node:fs";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { createInterface } from "node:readline";
 
 export const NDJSON = "data/regional-buildings.ndjson";
-const CACHE = "data/video/buildings.bin";
+const DEFAULT_CACHE = "data/video/buildings.bin";
+
+function cachePath(source: string): string {
+  return source === NDJSON ? DEFAULT_CACHE : `${source}.centroids.bin`;
+}
 /** Bump when the cache layout changes. */
 const CACHE_VERSION = 1;
 
@@ -25,10 +30,11 @@ export interface Buildings {
 }
 
 export async function loadBuildings(source = NDJSON): Promise<Buildings> {
-  const cached = await readCache(source);
+  const cache = cachePath(source);
+  const cached = await readCache(source, cache);
   if (cached) return cached;
   const buildings = await parse(source);
-  await writeCache(buildings);
+  await writeCache(buildings, cache);
   return buildings;
 }
 
@@ -85,14 +91,14 @@ function ringCenter(geometry: { type: string; coordinates: unknown } | null): [n
   return [x / total, y / total];
 }
 
-async function readCache(source: string): Promise<Buildings | null> {
+async function readCache(source: string, cache: string): Promise<Buildings | null> {
   try {
-    const [cacheStat, sourceStat] = await Promise.all([stat(CACHE), stat(source)]);
+    const [cacheStat, sourceStat] = await Promise.all([stat(cache), stat(source)]);
     if (cacheStat.mtimeMs < sourceStat.mtimeMs) return null;
   } catch {
     return null;
   }
-  const bytes = await readFile(CACHE);
+  const bytes = await readFile(cache);
   const header = new Uint32Array(bytes.buffer, bytes.byteOffset, 2);
   if (header[0] !== CACHE_VERSION) return null;
   const count = header[1];
@@ -113,13 +119,13 @@ async function readCache(source: string): Promise<Buildings | null> {
   };
 }
 
-async function writeCache(buildings: Buildings) {
-  await mkdir(dirname(CACHE), { recursive: true });
+async function writeCache(buildings: Buildings, cache: string) {
+  await mkdir(dirname(cache), { recursive: true });
   const header = Buffer.from(new Uint32Array([CACHE_VERSION, buildings.count]).buffer);
   const parts = [buildings.lng, buildings.lat, buildings.year, buildings.sqft].map((array) =>
     Buffer.from(array.buffer, array.byteOffset, array.byteLength),
   );
-  await writeFile(CACHE, Buffer.concat([header, ...parts]));
+  await writeFile(cache, Buffer.concat([header, ...parts]));
 }
 
 /** The latest known year built. */

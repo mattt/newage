@@ -11,13 +11,33 @@ export interface Place extends Camera {
   name: string;
   /** The first year of the clip; by default, from the buildings in the frame. */
   start?: number;
-  /** Cameras for particular output sizes, keyed like "1920x1080", in place of the center and zoom. */
+  /**
+   * Cameras for particular output shapes, keyed by a size such as "1920x1080",
+   * in place of the center and zoom. A size of the same shape uses the same camera.
+   */
   frames?: Record<string, Camera>;
+  /** The place's own pace, in place of --years-per-second. */
+  yearsPerSecond?: number;
+  /** The place's own time on its last year, in place of --hold. */
+  hold?: number;
+  /** The short side in pixels at which to draw the map before scaling it down to the output. */
+  raster?: number;
+  /** The place's own level lift for scaled-down frames, in place of --lift. */
+  lift?: number;
+  /** The place's own note density limit, in place of --busiest. */
+  busiest?: number | "auto";
 }
 
 /** The place's camera for an output size. */
 export function cameraFor(place: Place, size: OutputSize): Camera {
-  return place.frames?.[size.name] ?? { center: place.center, zoom: place.zoom };
+  const frames = Object.entries(place.frames ?? {});
+  const match =
+    frames.find(([key]) => key === size.name) ??
+    frames.find(([key]) => {
+      const other = parseSize(key);
+      return Math.abs(other.width / other.height - size.width / size.height) < 1e-6;
+    });
+  return match?.[1] ?? { center: place.center, zoom: place.zoom };
 }
 
 export async function loadPlaces(file: string): Promise<Place[]> {

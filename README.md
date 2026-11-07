@@ -258,7 +258,8 @@ npm run video:render -- --only ladds-addition --size 1080x1920 --size 1920x1080
 npm run video:render -- --size 1920x1080 --years-per-second 20 --hold 1.5 --fade 0.3
 ```
 
-The first run caches building centroids in `data/video/buildings.bin`.
+The first run caches building centroids in `data/video/buildings.bin`,
+or beside another NDJSON given with `--buildings-data`, as `<file>.centroids.bin`.
 Output goes to the ignored `renders/` directory:
 one MP4 for each place and, for more than one place, `sequence.mp4`.
 Run `node scripts/video/render.ts --help` for every option.
@@ -285,17 +286,45 @@ and the notes as JSON and CSV, with each note's time, place, year, pitch, veloci
 `analog`, two detuned saws through a resonant low-pass, with chorus and tape delay;
 `bells`, a two-operator FM bell;
 `analog-pad`, `analog` over a quiet pad that changes chord with each place;
-and `harp` or `marimba`, recordings from the
+`harp` or `marimba`, recordings from the
 [Versilian Community Sample Library](https://github.com/sgossner/VSCO-2-CE)
 (VSCO 2 CE), whose license is CC0 1.0;
-its readme asks for credit to Versilian Studios.
+its readme asks for credit to Versilian Studios;
+and `piano` or `vibraphone`, Logic Pro's Studio Grand Piano and Vibraphone.
 `bash scripts/video/fetch_samples.sh harp` (or `marimba`) downloads the samples
 to `data/video/samples/`,
-and `--reuse-frames` keeps earlier frames so that only the sound changes:
+and `--reuse-frames` keeps earlier frames so that only the sound changes.
+The picture is encoded once, in `renders/<size>/work/`,
+and each instrument's file copies it under its own soundtrack:
 
 ```bash
 npm run video:render -- --size 1920x1080 --reuse-frames --instrument harp
 ```
+
+The Logic instruments need Logic Pro and its sound library in `~/Music`.
+Apple's AUSampler cannot play the library's current instruments,
+whose samples are packed into "consolidated" CAF files,
+so `scripts/video/exs.ts` reads each instrument's zones itself
+and decodes only the parts of the CAF that the notes play.
+A note's level chooses the recorded velocity layer,
+and every layer's attack is matched,
+so the notes keep the same mapping as the other instruments.
+The Logic Pro Software License Agreement (version 12.4, in the app's resources),
+section 2C, allows this use:
+
+> Except as otherwise provided, all Sample Content included in the Apple Software
+> may be used on a royalty-free basis to create your own original soundtracks
+> for your audio and video projects. You may broadcast, publish, display,
+> and/or distribute your own soundtracks that were created using the Sample Content,
+> however, individual Sample Content assets may not be commercially or otherwise
+> distributed on a standalone basis, nor may they be repackaged in whole or in part
+> as audio samples, clipart, music beds, sound effects, sound files, sound libraries,
+> stock animation, or similar assets.
+
+The same section forbids using the Sample Content to train or test
+machine learning models.
+The renderer reads the samples from Logic's library and never copies them
+into this repository or its outputs, except as part of a rendered soundtrack.
 
 To put an outside soundtrack under a finished video,
 normalized the same way and never time-stretched:
@@ -324,15 +353,45 @@ which restores what WebGL's own antialiasing loses before the downscale.
 Thousands of buildings arrive each year, so `--busiest auto` scales the notes
 to the busiest year in view, instead of playing every year at the note cap:
 
+A place can set its own `yearsPerSecond`, `hold`, `lift`, and `busiest`,
+and a `raster`: the short side in pixels at which its map is drawn
+before it is scaled down, whatever the output size.
+`region.json` sets 6 years per second, a 4-second hold, a raster of 4320 pixels,
+a lift of 1.2, and `busiest` of `auto`:
+
 ```bash
 npm run video:render -- --places scripts/video/region.json \
-  --size 1920x1080 --size 1080x1920 --years-per-second 6 --hold 4 \
-  --supersample 4 --lift 1.2 --busiest auto --instrument harp \
+  --size 1920x1080 --size 1080x1920 --instrument harp \
   --buildings-tiles data/production-buildings.pmtiles
 ```
 
 This shot uses the production archive, which keeps nearly every building
 at zooms 10 to 12.
+
+### Full cut
+
+The full cut joins every place in `places.json` and then the whole-city shot,
+at 3840 by 2160 and 60 frames a second.
+`--dry-run` prints each clip's length and the total, about 2:43.
+At 4K the places draw at a pixel ratio of 4, the same geometry as the 1080p cuts,
+and the whole-city shot draws at twice the output size and scales down.
+The picture is H.264 High at CRF 17, with keyframes every two seconds,
+and `--maxrate 40` caps its peaks at 40 Mb/s for playback from a laptop over HDMI.
+The files carry no title, artist, or comment.
+
+The cut can use freshly downloaded data in its own directory,
+without replacing `data/` or the published archive:
+
+```bash
+F=data/fresh-2026-11-07
+uv run scripts/process_buildings.py --download-dir $F/inputs \
+  --output $F/buildings.ndjson --stats-output $F/building-stats.json
+bash scripts/build_tiles.sh $F/buildings.ndjson $F/buildings.pmtiles
+npm run video:render -- --places scripts/video/places.json --places scripts/video/region.json \
+  --size 3840x2160 --fps 60 --sequence-only --maxrate 40 --instrument piano \
+  --buildings-data $F/buildings.ndjson --stats $F/building-stats.json \
+  --buildings-tiles $F/buildings.pmtiles --out renders/full
+```
 
 ## Costs
 

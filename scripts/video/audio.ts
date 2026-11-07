@@ -143,9 +143,9 @@ function yearBrightness(year: number): number {
 }
 
 /** The MIDI velocity for a note's amplitude, on a decibel scale. */
-export function velocity(amplitude: number): number {
+export function velocity(amplitude: number, [low, high]: [number, number] = [0, 127]): number {
   const db = 20 * Math.log10(amplitude / MAX_AMPLITUDE);
-  return Math.min(127, Math.max(1, Math.round(127 * (1 + db / VELOCITY_RANGE_DB))));
+  return Math.min(high, Math.max(1, low, Math.round(low + (high - low) * (1 + db / VELOCITY_RANGE_DB))));
 }
 
 export function midiFrequency(midi: number): number {
@@ -176,6 +176,10 @@ export interface Instrument {
   effects?: Effect[];
   /** The level of the room reverb; 0.35 by default. */
   reverb?: number;
+  /** The General MIDI program for the MIDI export; 46, Orchestral Harp, by default. */
+  program?: number;
+  /** The MIDI velocities of the quietest and loudest notes, for recorded layers and the MIDI export. */
+  velocities?: [number, number];
 }
 
 /** Renders notes to stereo samples, with a little room reverb. */

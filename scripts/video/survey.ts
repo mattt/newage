@@ -1,7 +1,7 @@
 // Prints how each place in a places file would animate: the buildings in its
 // frame, the spread of their years, and when most of them appear.
 //
-// Usage: node scripts/video/survey.ts [places.json] [--size 1080x1920] [--json]
+// Usage: node scripts/video/survey.ts [places.json] [--size 1080x1920] [--buildings-data FILE] [--json]
 import { latestYear, loadBuildings, type Buildings } from "./buildings.ts";
 import { projector } from "./frame.ts";
 import { cameraFor, DEFAULT_PLACES, loadPlaces, parseSize, startYear, type OutputSize, type Place } from "./places.ts";
@@ -67,9 +67,12 @@ if (import.meta.main) {
   const json = args.includes("--json");
   const sizeIndex = args.indexOf("--size");
   const size = parseSize(sizeIndex >= 0 ? args[sizeIndex + 1] : "1080x1920");
-  const file = args.find((arg, i) => !arg.startsWith("--") && args[i - 1] !== "--size") ?? DEFAULT_PLACES;
+  const dataIndex = args.indexOf("--buildings-data");
+  const file =
+    args.find((arg, i) => !arg.startsWith("--") && args[i - 1] !== "--size" && args[i - 1] !== "--buildings-data") ??
+    DEFAULT_PLACES;
   const places = await loadPlaces(file);
-  const buildings = await loadBuildings();
+  const buildings = await loadBuildings(dataIndex >= 0 ? args[dataIndex + 1] : undefined);
   const lastYear = latestYear(buildings);
   const rows = places.map((place) => survey(buildings, place, size, lastYear));
   if (json) {

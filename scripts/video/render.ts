@@ -5,13 +5,13 @@
 // Usage: node scripts/video/render.ts [options]
 // Run with --help for the options.
 import { spawn } from "node:child_process";
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
 import { chromium, type Browser, type Page } from "playwright-core";
 import sharp from "sharp";
 import { render as renderAudio, notes, SAMPLE_RATE, velocity, writeWav, type Note, type NoteEvent } from "./audio.ts";
-import { loadBuildings } from "./buildings.ts";
+import { loadBuildings, NDJSON } from "./buildings.ts";
 import { projector } from "./frame.ts";
 import { normalize, run } from "./loudness.ts";
 import { writeMidi, type Section } from "./midi.ts";
@@ -30,7 +30,8 @@ import { startServer } from "./server.ts";
 
 const HELP = `Usage: node scripts/video/render.ts [options]
 
-  --places FILE           places to render (default ${DEFAULT_PLACES})
+  --places FILE           places to render (default ${DEFAULT_PLACES}); repeat to join
+                          several files into one sequence, in order
   --only ID,ID            render only these places, in this order
   --size WxH              output size; repeat for more (default 1080x1920)
   --years-per-second N    playback speed (default 15)
@@ -54,13 +55,22 @@ const HELP = `Usage: node scripts/video/render.ts [options]
                           N buildings in one year, or the busiest year in view (auto),
                           instead of reaching the note cap at a few buildings
   --stills                render each place at its last year, and a contact sheet
+  --sequence-only         write only the joined sequence, not a file for each place
+  --dry-run               print each clip's years and length, and the total, then stop
+  --maxrate MBPS          cap the H.264 bitrate, for playback from a laptop (default none)
   --buildings-tiles FILE  default data/regional-buildings.pmtiles
   --orientation-tiles FILE  default data/orientation.pmtiles
+  --buildings-data FILE   building footprints as NDJSON (default ${NDJSON})
+  --stats FILE            the data's year bounds (default src/data/building-stats.json)
+
+A place in a places file can set its own yearsPerSecond, hold, lift, and busiest,
+and raster: the short side in pixels at which its map is drawn before it is scaled
+down to the output, which sets its supersampling for any output size.
 `;
 
 const { values: options } = parseArgs({
   options: {
-    places: { type: "string", default: DEFAULT_PLACES },
+    places: { type: "string", multiple: true },
     only: { type: "string" },
     size: { type: "string", multiple: true },
     "years-per-second": { type: "string", default: "15" },
@@ -79,6 +89,11 @@ const { values: options } = parseArgs({
     lift: { type: "string", default: "1" },
     busiest: { type: "string" },
     stills: { type: "boolean", default: false },
+    "sequence-only": { type: "boolean", default: false },
+    "dry-run": { type: "boolean", default: false },
+    maxrate: { type: "string" },
+    "buildings-data": { type: "string", default: NDJSON },
+    stats: { type: "string", default: "src/data/building-stats.json" },
     "buildings-tiles": { type: "string", default: "data/regional-buildings.pmtiles" },
     "orientation-tiles": { type: "string", default: "data/orientation.pmtiles" },
     help: { type: "boolean", default: false },
@@ -93,6 +108,7 @@ if (options.help) {
 const FPS = positive("fps");
 const YEARS_PER_SECOND = positive("years-per-second");
 const HOLD = Number(options.hold);
+const MAXRATE = options.maxrate === undefined ? undefined : Number(options.maxrate);
 const FADE = Number(options.fade);
 const INSTRUMENT = options.instrument;
 /** Outputs with another instrument than the default get its name, so they do not replace each other. */
@@ -129,6 +145,17 @@ interface FrameState {
   labelOpacity: number;
 }
 
+/** A place's own settings, or the run's. */
+function settingsFor(place: Place) {
+  const busiest = place.busiest ?? BUSIEST;
+  return {
+    yearsPerSecond: place.yearsPerSecond ?? YEARS_PER_SECOND,
+    hold: place.hold ?? HOLD,
+    lift: place.lift ?? LIFT,
+    busiest: busiest === "auto" || busiest === undefined ? busiest : Number(busiest),
+  };
+}
+
 /** How the page draws frames for an output size. */
 interface Capture {
   /** The page's size in CSS pixels. */
@@ -147,8 +174,9 @@ interface Capture {
  * a pixel ratio of 1, and every zoom grows to match, so the map loads the finer
  * tiles of a closer zoom; the frames are then scaled down.
  */
-function captureFor(size: OutputSize): Capture {
-  if (SUPERSAMPLE === 0) {
+function captureFor(size: OutputSize, place?: Place): Capture {
+  const supersample = place?.raster ? Math.ceil(place.raster / Math.min(size.width, size.height)) : SUPERSAMPLE;
+  if (supersample === 0) {
     return {
       width: Math.round(size.viewport.width),
       height: Math.round(size.viewport.height),
@@ -157,14 +185,14 @@ function captureFor(size: OutputSize): Capture {
       downscale: false,
     };
   }
-  const width = Math.round(size.width * SUPERSAMPLE);
-  const height = Math.round(size.height * SUPERSAMPLE);
+  const width = Math.round(size.width * supersample);
+  const height = Math.round(size.height * supersample);
   return {
     width,
     height,
     deviceScaleFactor: 1,
     zoomOffset: Math.log2(Math.min(width, height) / SHORT_SIDE),
-    downscale: SUPERSAMPLE > 1,
+    downscale: supersample > 1,
   };
 }
 
@@ -177,22 +205,40 @@ interface Clip {
   /** Notes, in seconds from the start of the clip. */
   events: NoteEvent[];
   seconds: number;
+  yearsPerSecond: number;
+  busiest: number | "auto" | undefined;
 }
 
-let places = await loadPlaces(options.places);
+const placeFiles = options.places?.length ? options.places : [DEFAULT_PLACES];
+let places = (await Promise.all(placeFiles.map((file) => loadPlaces(file)))).flat();
 if (options.only) {
   const ids = options.only.split(",");
   places = ids.map((id) => {
     const place = places.find((candidate) => candidate.id === id);
-    if (!place) throw new Error(`No place ${id} in ${options.places}`);
+    if (!place) throw new Error(`No place ${id} in ${placeFiles.join(", ")}`);
     return place;
   });
 }
 const sizes = (options.size?.length ? options.size : ["1080x1920"]).map(parseSize);
-const buildings = await loadBuildings();
-// The site's year bounds, so that the filter matches the site's Play.
-const stats = JSON.parse(await readFile("src/data/building-stats.json", "utf8"));
+const buildings = await loadBuildings(options["buildings-data"]);
+// The data's year bounds, as the site reads them, so that the filter matches the site's Play.
+const stats = JSON.parse(await readFile(options.stats, "utf8"));
 const bounds = { earliest: stats.earliestYear as number, latest: stats.latestYear as number };
+
+if (options["dry-run"]) {
+  for (const size of sizes) {
+    let total = 0;
+    for (const place of places) {
+      const clip = planClip(place, size);
+      total += clip.seconds;
+      console.log(`${size.name} ${place.id}: ${clip.start}–${clip.end} at ${clip.yearsPerSecond} years/s, ` +
+        `${clip.seconds.toFixed(2)} s, ${clip.events.length} buildings sounding`);
+    }
+    const minutes = Math.floor(total / 60);
+    console.log(`${size.name} total: ${total.toFixed(2)} s (${minutes}:${(total - minutes * 60).toFixed(1).padStart(4, "0")})`);
+  }
+  process.exit(0);
+}
 
 const server = await startServer({
   buildings: options["buildings-tiles"],
@@ -204,21 +250,32 @@ const browser = await chromium.launch({
   args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"],
 });
 
+/** One page for each page size and pixel ratio, since a page cannot change its pixel ratio. */
+const pages = new Map<string, Page>();
+
+async function pageFor(size: OutputSize, place: Place): Promise<Page> {
+  const capture = captureFor(size, place);
+  const key = `${capture.width}x${capture.height}@${capture.deviceScaleFactor}`;
+  let page = pages.get(key);
+  if (!page) {
+    page = await openPage(browser, capture);
+    pages.set(key, page);
+  }
+  return page;
+}
+
 try {
   for (const size of sizes) {
-    const page = await openPage(browser, size);
     const directory = join(options.out, `${size.width}x${size.height}`);
-    if (options.stills) await renderStills(page, size, directory);
-    else await renderVideo(page, size, directory);
-    await page.close();
+    if (options.stills) await renderStills(size, directory);
+    else await renderVideo(size, directory);
   }
 } finally {
   await browser.close();
   await server.close();
 }
 
-async function openPage(browser: Browser, size: OutputSize): Promise<Page> {
-  const capture = captureFor(size);
+async function openPage(browser: Browser, capture: Capture): Promise<Page> {
   const page = await browser.newPage({
     viewport: { width: capture.width, height: capture.height },
     deviceScaleFactor: capture.deviceScaleFactor,
@@ -239,9 +296,9 @@ async function show(page: Page, state: FrameState): Promise<Buffer> {
 }
 
 /** Captures a frame at the output size. */
-async function captureFrame(page: Page, place: Place, size: OutputSize, year: number): Promise<Buffer> {
-  const frame = await show(page, frameState(place, size, year));
-  return captureFor(size).downscale ? shrink(frame, size) : frame;
+async function captureFrame(place: Place, size: OutputSize, year: number): Promise<Buffer> {
+  const frame = await show(await pageFor(size, place), frameState(place, size, year));
+  return captureFor(size, place).downscale ? shrink(frame, size, settingsFor(place).lift) : frame;
 }
 
 /**
@@ -250,18 +307,18 @@ async function captureFrame(page: Page, place: Place, size: OutputSize, year: nu
  * around it. In linear light that average matches the light the building gives
  * off; in sRGB values, it comes out darker, which mutes the colors.
  */
-async function shrink(frame: Buffer, size: OutputSize): Promise<Buffer> {
+async function shrink(frame: Buffer, size: OutputSize, lift: number): Promise<Buffer> {
   const image = sharp(frame);
   if (options.downscale === "linear") image.pipelineColourspace("scrgb").toColourspace("srgb");
   const small = await image.resize(size.width, size.height, { kernel: "lanczos3" }).removeAlpha().png().toBuffer();
-  if (LIFT === 1) return small;
+  if (lift === 1) return small;
   // A separate step, so that the gain applies to sRGB values, around the background.
-  return sharp(small).linear(LIFT, -(LIFT - 1) * BACKGROUND_LEVEL).png().toBuffer();
+  return sharp(small).linear(lift, -(lift - 1) * BACKGROUND_LEVEL).png().toBuffer();
 }
 
 function frameState(place: Place, size: OutputSize, year: number): FrameState {
   const camera = cameraFor(place, size);
-  const capture = captureFor(size);
+  const capture = captureFor(size, place);
   return {
     center: camera.center,
     zoom: camera.zoom + capture.zoomOffset,
@@ -270,19 +327,19 @@ function frameState(place: Place, size: OutputSize, year: number): FrameState {
     includeUnknown: !options["no-unknown"],
     name: options["no-labels"] ? null : place.name,
     labelScale: 2 ** capture.zoomOffset,
-    labelOpacity: capture.downscale ? 1 / LIFT : 1,
+    labelOpacity: capture.downscale ? 1 / settingsFor(place).lift : 1,
   };
 }
 
 // Stills
 
-async function renderStills(page: Page, size: OutputSize, directory: string) {
+async function renderStills(size: OutputSize, directory: string) {
   const stills = join(directory, "stills");
   await mkdir(stills, { recursive: true });
   const files: string[] = [];
   for (const place of places) {
     const file = join(stills, `${place.id}.png`);
-    await writeFile(file, await captureFrame(page, place, size, bounds.latest));
+    await writeFile(file, await captureFrame(place, size, bounds.latest));
     files.push(file);
     console.log(file);
   }
@@ -332,11 +389,12 @@ function planClip(place: Place, size: OutputSize): Clip {
   years.sort((a, b) => a - b);
   const start = startYear(place, years);
   const end = bounds.latest;
-  const runFrames = Math.round(((end - start) / YEARS_PER_SECOND) * FPS) + 1;
-  const holdFrames = Math.round(HOLD * FPS);
+  const { yearsPerSecond, hold, busiest } = settingsFor(place);
+  const runFrames = Math.round(((end - start) / yearsPerSecond) * FPS) + 1;
+  const holdFrames = Math.round(hold * FPS);
   const frameYears: number[] = [];
   for (let f = 0; f < runFrames + holdFrames; f++) {
-    frameYears.push(Math.min(end, start + Math.floor((f * YEARS_PER_SECOND) / FPS + 1e-9)));
+    frameYears.push(Math.min(end, start + Math.floor((f * yearsPerSecond) / FPS + 1e-9)));
   }
   // A building sounds on the first frame that shows its year.
   const firstFrame = new Map<number, number>();
@@ -352,7 +410,7 @@ function planClip(place: Place, size: OutputSize): Clip {
     const [x] = project(buildings.lng[i], buildings.lat[i])!;
     events.push({
       time: frame / FPS,
-      yearSeconds: 1 / YEARS_PER_SECOND,
+      yearSeconds: 1 / yearsPerSecond,
       x,
       year,
       sqft: buildings.sqft[i],
@@ -360,10 +418,19 @@ function planClip(place: Place, size: OutputSize): Clip {
       place: place.id,
     });
   }
-  return { place, start, end, years: frameYears, events, seconds: frameYears.length / FPS };
+  return {
+    place,
+    start,
+    end,
+    years: frameYears,
+    events,
+    seconds: frameYears.length / FPS,
+    yearsPerSecond,
+    busiest,
+  };
 }
 
-async function renderVideo(page: Page, size: OutputSize, directory: string) {
+async function renderVideo(size: OutputSize, directory: string) {
   const work = join(directory, "work");
   await mkdir(work, { recursive: true });
   const clips = places.map((place) => planClip(place, size));
@@ -371,13 +438,15 @@ async function renderVideo(page: Page, size: OutputSize, directory: string) {
   for (const clip of clips) {
     const began = performance.now();
     const video = join(work, `${clip.place.id}.mkv`);
-    if (!(options["reuse-frames"] && (await exists(video)))) await renderFrames(page, clip, size, video);
-    const output = join(directory, `${clip.place.id}${SUFFIX}.mp4`);
-    await assemble([clip], [video], output, work);
+    if (!(options["reuse-frames"] && (await exists(video)))) await renderFrames(clip, size, video);
+    if (!options["sequence-only"] || clips.length === 1) {
+      const output = join(directory, `${clip.place.id}${SUFFIX}.mp4`);
+      await assemble([clip], [video], output, work);
+      console.log(output);
+    }
     const seconds = (performance.now() - began) / 1000;
     timings.push(`${clip.place.id}: ${clip.seconds.toFixed(1)} s of video, ${clip.start}–${clip.end}, ` +
       `${clip.events.length} buildings sounding, rendered in ${seconds.toFixed(0)} s`);
-    console.log(output);
   }
   if (clips.length > 1) {
     const output = join(directory, `sequence${SUFFIX}.mp4`);
@@ -388,7 +457,7 @@ async function renderVideo(page: Page, size: OutputSize, directory: string) {
 }
 
 /** Captures each distinct frame once, and repeats it while the year holds. */
-async function renderFrames(page: Page, clip: Clip, size: OutputSize, output: string) {
+async function renderFrames(clip: Clip, size: OutputSize, output: string) {
   const ffmpeg = spawn(
     "ffmpeg",
     ["-hide_banner", "-loglevel", "error", "-y", "-f", "image2pipe", "-framerate", String(FPS),
@@ -400,7 +469,7 @@ async function renderFrames(page: Page, clip: Clip, size: OutputSize, output: st
   let frame: Buffer | undefined;
   for (const [f, year] of clip.years.entries()) {
     if (year !== previousYear) {
-      frame = await captureFrame(page, clip.place, size, year);
+      frame = await captureFrame(clip.place, size, year);
       previousYear = year;
     }
     if (!ffmpeg.stdin.write(frame)) await new Promise((resolve) => ffmpeg.stdin.once("drain", resolve));
@@ -414,6 +483,7 @@ async function renderFrames(page: Page, clip: Clip, size: OutputSize, output: st
 /**
  * Joins clips into one file with a soundtrack: the video in H.264 for wide
  * playback, and the audio synthesized for the whole sequence, then normalized.
+ * The video is encoded once and kept, so that another soundtrack reuses it.
  */
 async function assemble(clips: Clip[], videos: string[], output: string, work: string) {
   const name = output.replace(/^.*\//, "").replace(/\.mp4$/, "");
@@ -424,6 +494,50 @@ async function assemble(clips: Clip[], videos: string[], output: string, work: s
     total += clip.seconds;
   }
 
+  const encoded = join(work, `${name.slice(0, name.length - SUFFIX.length)}.video.mp4`);
+  if (!(options["reuse-frames"] && (await newerThan(encoded, videos)))) {
+    await encodeVideo(clips, videos, encoded, total);
+  }
+  const inputs = ["-i", encoded];
+  const audioArgs: string[] = [];
+  if (!options["no-audio"]) {
+    // Notes are chosen clip by clip, since each clip has its own pace and density.
+    const events = clips.flatMap((clip, i) =>
+      clip.events.map((event) => ({ ...event, time: event.time + offsets[i] })),
+    );
+    const played: Note[] = [];
+    clips.forEach((clip) => {
+      played.push(...notes(events.filter((event) => event.place === clip.place.id), clip.busiest));
+    });
+    const raw = join(work, `${name}-raw.wav`);
+    const normalized = join(work, `${name}.wav`);
+    const soundSections = clips.map((clip, i) => ({
+      start: offsets[i],
+      seconds: clip.seconds,
+      firstYear: clip.start,
+      lastYear: clip.end,
+      yearsPerSecond: clip.yearsPerSecond,
+    }));
+    await writeWav(raw, renderAudio(played, total, instrument, soundSections));
+    await normalize(raw, normalized);
+    const sections = clips.map((clip, i) => ({ id: clip.place.id, name: clip.place.name, start: offsets[i] }));
+    await exportSound(join(dirname(output), name), normalized, played, sections, total);
+    inputs.push("-i", normalized);
+    audioArgs.push("-map", "1:a", "-c:a", "aac", "-b:a", "256k", "-ar", String(SAMPLE_RATE));
+  }
+  // No title, artist, or comment: -map_metadata -1 drops anything the inputs carry.
+  await run("ffmpeg", [
+    "-hide_banner", "-loglevel", "error", "-y", ...inputs, "-map", "0:v", ...audioArgs,
+    "-c:v", "copy", "-map_metadata", "-1", "-movflags", "+faststart", "-t", total.toFixed(3), output,
+  ]);
+}
+
+/**
+ * Encodes the clips' frames as H.264 High with keyframes every two seconds.
+ * --maxrate caps the bitrate, so that a laptop's hardware decoder plays 4K at
+ * 60 fps over HDMI without dropping frames.
+ */
+async function encodeVideo(clips: Clip[], videos: string[], output: string, total: number) {
   const inputs: string[] = [];
   for (const video of videos) inputs.push("-i", video);
   const filters: string[] = [];
@@ -435,37 +549,26 @@ async function assemble(clips: Clip[], videos: string[], output: string, work: s
   });
   filters.push(`${clips.map((_, i) => `[v${i}]`).join("")}concat=n=${clips.length}:v=1:a=0,` +
     `scale=out_color_matrix=bt709:out_range=tv,format=yuv420p[v]`);
-
-  const audioArgs: string[] = [];
-  if (!options["no-audio"]) {
-    const events = clips.flatMap((clip, i) =>
-      clip.events.map((event) => ({ ...event, time: event.time + offsets[i] })),
-    );
-    const raw = join(work, `${name}-raw.wav`);
-    const normalized = join(work, `${name}.wav`);
-    const played = notes(events, BUSIEST);
-    const soundSections = clips.map((clip, i) => ({
-      start: offsets[i],
-      seconds: clip.seconds,
-      firstYear: clip.start,
-      lastYear: clip.end,
-      yearsPerSecond: YEARS_PER_SECOND,
-    }));
-    await writeWav(raw, renderAudio(played, total, instrument, soundSections));
-    await normalize(raw, normalized);
-    const sections = clips.map((clip, i) => ({ id: clip.place.id, name: clip.place.name, start: offsets[i] }));
-    await exportSound(join(dirname(output), name), normalized, played, sections, total);
-    inputs.push("-i", normalized);
-    audioArgs.push("-map", `${clips.length}:a`, "-c:a", "aac", "-b:a", "192k", "-ar", String(SAMPLE_RATE));
-  }
-
+  const rate = MAXRATE ? ["-maxrate", `${MAXRATE}M`, "-bufsize", `${2 * MAXRATE}M`] : [];
   await run("ffmpeg", [
     "-hide_banner", "-loglevel", "error", "-y", ...inputs,
-    "-filter_complex", filters.join(";"), "-map", "[v]", ...audioArgs,
-    "-c:v", "libx264", "-preset", "slow", "-crf", "17", "-r", String(FPS),
+    "-filter_complex", filters.join(";"), "-map", "[v]",
+    "-c:v", "libx264", "-preset", "slow", "-crf", "17", ...rate, "-profile:v", "high",
+    "-g", String(2 * FPS), "-r", String(FPS),
     "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709",
-    "-movflags", "+faststart", "-t", total.toFixed(3), output,
+    "-map_metadata", "-1", "-movflags", "+faststart", "-t", total.toFixed(3), output,
   ]);
+}
+
+/** Whether a file exists and is newer than every one of the others. */
+async function newerThan(file: string, others: string[]): Promise<boolean> {
+  try {
+    const { mtimeMs } = await stat(file);
+    const times = await Promise.all(others.map(async (other) => (await stat(other)).mtimeMs));
+    return times.every((time) => time < mtimeMs);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -474,7 +577,10 @@ async function assemble(clips: Clip[], videos: string[], output: string, work: s
  */
 async function exportSound(base: string, wav: string, played: Note[], sections: Section[], seconds: number) {
   await run("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y", "-i", wav, "-c:a", "pcm_s24le", `${base}.wav`]);
-  await writeMidi(`${base}.mid`, played, sections, seconds);
+  await writeMidi(`${base}.mid`, played, sections, seconds, {
+    program: instrument.program,
+    velocities: instrument.velocities,
+  });
   const names = new Map(sections.map((section) => [section.id, section.name]));
   const rows = played.map((note) => ({
     time: round(note.time, 4),
@@ -482,7 +588,7 @@ async function exportSound(base: string, wav: string, played: Note[], sections: 
     place: names.get(note.place) ?? note.place,
     year: note.year,
     midi: note.midi,
-    velocity: velocity(note.amplitude),
+    velocity: velocity(note.amplitude, instrument.velocities),
     pan: round(note.pan * 2 - 1, 3),
     sqft: note.sqft,
     buildings: note.buildings,

@@ -8,7 +8,7 @@ import { velocity, type Note } from "./audio.ts";
 const TICKS_PER_BEAT = 1000;
 const MICROSECONDS_PER_BEAT = 500_000;
 const TICKS_PER_SECOND = (TICKS_PER_BEAT * 1_000_000) / MICROSECONDS_PER_BEAT;
-/** General MIDI program 47, Orchestral Harp, counted from zero. */
+/** General MIDI program 47, Orchestral Harp, counted from zero; the default program. */
 const HARP = 46;
 /** Each note lasts this long; a plucked instrument decays on its own. */
 const NOTE_SECONDS = 1.5;
@@ -27,7 +27,13 @@ interface TrackEvent {
   bytes: number[];
 }
 
-export async function writeMidi(file: string, notes: Note[], sections: Section[], seconds: number) {
+export async function writeMidi(
+  file: string,
+  notes: Note[],
+  sections: Section[],
+  seconds: number,
+  { program = HARP, velocities }: { program?: number; velocities?: [number, number] } = {},
+) {
   const tick = (time: number) => Math.round(time * TICKS_PER_SECOND);
   const conductor: TrackEvent[] = [
     { tick: 0, order: 0, bytes: meta(0x03, "Age of the City") },
@@ -38,7 +44,7 @@ export async function writeMidi(file: string, notes: Note[], sections: Section[]
   for (const section of sections) {
     const events: TrackEvent[] = [
       { tick: 0, order: 0, bytes: meta(0x03, section.name) },
-      { tick: 0, order: 0, bytes: [0xc0, HARP] },
+      { tick: 0, order: 0, bytes: [0xc0, program] },
     ];
     // A repeated pitch ends the earlier note, so no note-off cuts a later note short.
     const sounding = new Map<number, TrackEvent>();
@@ -46,7 +52,7 @@ export async function writeMidi(file: string, notes: Note[], sections: Section[]
       const on = tick(note.time);
       const previous = sounding.get(note.midi);
       if (previous && previous.tick > on) previous.tick = on;
-      events.push({ tick: on, order: 2, bytes: [0x90, note.midi, velocity(note.amplitude)] });
+      events.push({ tick: on, order: 2, bytes: [0x90, note.midi, velocity(note.amplitude, velocities)] });
       const off = { tick: on + tick(NOTE_SECONDS), order: 1, bytes: [0x80, note.midi, 0] };
       events.push(off);
       sounding.set(note.midi, off);

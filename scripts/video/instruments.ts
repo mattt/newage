@@ -9,11 +9,17 @@
 // - analog-pad: analog over a quiet pad whose chord changes with each place
 //   and whose brightness follows the years of the clip.
 // - marimba: the recorded marimba from VSCO 2 CE, doubled softly with a sine.
+// - piano: Logic Pro's Studio Grand Piano, its sustained notes, read by exs.ts.
+// - vibraphone: Logic Pro's Vibraphone, read by exs.ts.
 import { join } from "node:path";
 import { panGains, pluck, SAMPLE_RATE, type Instrument, type Note, type SoundSection, type Voice } from "./audio.ts";
+import { loadExs } from "./exs.ts";
 import { loadSampler } from "./sampler.ts";
 
-export const INSTRUMENTS = ["pluck", "harp", "analog", "bells", "analog-pad", "marimba"] as const;
+export const INSTRUMENTS = ["pluck", "harp", "analog", "bells", "analog-pad", "marimba", "piano", "vibraphone"] as const;
+
+/** The notes that the soundtrack plays, D3 to A5, with a margin; Logic instruments decode only these. */
+const LOGIC_KEYS: [number, number] = [48, 84];
 
 export async function loadInstrument(name: string, samples?: string): Promise<Instrument> {
   const directory = (instrument: string) => samples ?? join("data/video/samples", instrument);
@@ -28,6 +34,34 @@ export async function loadInstrument(name: string, samples?: string): Promise<In
       return { voice: bell, reverb: 0.4 };
     case "analog-pad":
       return { voice: analog, bed: pad, effects: [chorus, tapeDelay], reverb: 0.3 };
+    // Logic Pro's newest grand piano, its sustained notes only, with five velocity layers.
+    case "piano":
+      return {
+        voice: await loadExs("z_Internal/Studio Piano/Studio Grand Piano (One Mic).exs", {
+          groups: /^Sustain/,
+          keys: LOGIC_KEYS,
+          velocities: [30, 100],
+          noteSeconds: 7,
+          fadeSeconds: 2,
+          cutoff: [3000, 16000],
+        }),
+        reverb: 0.3,
+        program: 0,
+        velocities: [30, 100],
+      };
+    case "vibraphone":
+      return {
+        voice: await loadExs("Mallet/Vibraphone.exs", {
+          keys: LOGIC_KEYS,
+          velocities: [40, 110],
+          noteSeconds: 5,
+          fadeSeconds: 1.2,
+          cutoff: [3000, 14000],
+        }),
+        reverb: 0.35,
+        program: 11,
+        velocities: [40, 110],
+      };
     case "marimba": {
       // VSCO 2 CE names its marimba samples an octave below the pitch they sound.
       const marimba = await loadSampler(directory("marimba"), { nameOffset: 12 });
