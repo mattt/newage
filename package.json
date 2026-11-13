@@ -8,7 +8,9 @@
     "test": "vp test run",
     "dev": "wrangler dev --infer-origin-from-routes=false",
     "dev:astro": "astro dev",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "video:survey": "node scripts/video/survey.ts",
+    "video:render": "node scripts/video/render.ts"
   },
   "dependencies": {
     "@astrojs/sitemap": "3.7.4",
@@ -27,6 +29,7 @@
     "@types/culori": "4.0.1",
     "@types/node": "26.6.6",
     "hast-util-select": "6.0.4",
+    "playwright-core": "1.64.1",
     "rehype-parse": "9.0.1",
     "typescript": "6.0.3",
     "unified": "11.0.5",
