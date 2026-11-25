@@ -1,0 +1,18 @@
+[
+  {
+    "id": "region",
+    "name": "Portland Metro Region",
+    "center": [-122.6964, 45.4262],
+    "zoom": 9.544,
+    "start": 1880,
+    "frames": {
+      "1920x1080": { "center": [-122.6964, 45.4262], "zoom": 9.544 },
+      "1080x1920": { "center": [-122.6523, 45.3933], "zoom": 9.076 }
+    },
+    "yearsPerSecond": 6,
+    "hold": 4,
+    "raster": 4320,
+    "lift": 1.2,
+    "busiest": "auto"
+  }
+]

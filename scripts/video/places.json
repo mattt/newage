@@ -1,0 +1,15 @@
+[
+  { "id": "downtown", "name": "Downtown", "center": [-122.6780, 45.5175], "zoom": 15 },
+  { "id": "ladds-addition", "name": "Ladd's Addition", "center": [-122.6490, 45.5080], "zoom": 15.2 },
+  { "id": "boise", "name": "Boise", "center": [-122.6740, 45.5505], "zoom": 15 },
+  { "id": "st-johns", "name": "St. Johns", "center": [-122.7520, 45.5890], "zoom": 15 },
+  { "id": "laurelhurst", "name": "Laurelhurst", "center": [-122.6255, 45.5255], "zoom": 15 },
+  { "id": "kenton", "name": "Kenton", "center": [-122.6870, 45.5790], "zoom": 15 },
+  { "id": "hazelwood", "name": "Hazelwood", "center": [-122.5482, 45.5343], "zoom": 15 },
+  { "id": "lents", "name": "Lents", "center": [-122.5700, 45.4800], "zoom": 15 },
+  { "id": "pearl-district", "name": "Pearl District", "center": [-122.6825, 45.5290], "zoom": 15.5 },
+  { "id": "south-waterfront", "name": "South Waterfront", "center": [-122.6745, 45.4990], "zoom": 15 },
+  { "id": "bethany", "name": "Bethany", "center": [-122.8400, 45.5550], "zoom": 15 },
+  { "id": "happy-valley", "name": "Happy Valley", "center": [-122.5150, 45.4400], "zoom": 14.5 },
+  { "id": "river-terrace", "name": "River Terrace", "center": [-122.8498, 45.4192], "zoom": 15 }
+]

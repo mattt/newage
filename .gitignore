@@ -25,6 +25,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # Build outputs
+/renders/
 dist/
 build/
 .astro/
